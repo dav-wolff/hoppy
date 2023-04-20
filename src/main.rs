@@ -1,4 +1,5 @@
 use std::str::from_utf8;
+use std::time::Duration;
 use read_buffer::ReadBuffer;
 
 const BAUD_RATE: u32 = 9600;
@@ -52,6 +53,7 @@ fn send(path: &str) {
 
 fn receive(path: &str) {
 	let mut port = serialport::new(path, BAUD_RATE)
+		.timeout(Duration::from_secs(10))
 		.open()
 		.expect("couldn't open serial port");
 	
