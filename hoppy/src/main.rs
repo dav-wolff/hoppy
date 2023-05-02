@@ -1,4 +1,5 @@
 use std::str::from_utf8;
+use std::thread;
 use std::time::Duration;
 use read_buffer::ReadBuffer;
 
@@ -8,6 +9,7 @@ enum Mode {
 	Send,
 	Receive,
 	List,
+	TestAT,
 }
 
 fn main() {
@@ -18,6 +20,7 @@ fn main() {
 		"send" => Mode::Send,
 		"recv" => Mode::Receive,
 		"list" => Mode::List,
+		"test-at" => Mode::TestAT,
 		_ => panic!("unknown mode"),
 	};
 	
@@ -27,6 +30,7 @@ fn main() {
 		Mode::List => list(),
 		Mode::Send => send(path.as_str()),
 		Mode::Receive => receive(path.as_str()),
+		Mode::TestAT => test_at(path.as_str()),
 	}
 }
 
@@ -65,4 +69,30 @@ fn receive(path: &str) {
 		.expect("received invalid utf-8 over serial port");
 	
 	println!("{text}");
+}
+
+fn test_at(path: &str) {
+	let mut port = serialport::new(path, BAUD_RATE)
+		.timeout(Duration::from_secs(10))
+		.open()
+		.expect("couldn't open serial port");
+	
+	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
+	
+	loop {
+		port.write(b"AT\r\n")
+			.expect("couldn't write to port");
+		println!("> AT");
+		
+		let reply = buffer.read_while(&mut port, |chunk| {
+			!chunk.ends_with(&[b'\n'])
+		}).expect("couldn't read from port");
+		
+		let reply_text = from_utf8(reply)
+			.expect("received invalid utf-8 reply");
+		
+		println!("< {reply_text}");
+		
+		thread::sleep(Duration::from_secs(2));
+	}
 }
