@@ -1,5 +1,6 @@
 use std::str::from_utf8;
-use std::thread;
+use std::{io, thread};
+use std::io::Write;
 use std::time::Duration;
 use read_buffer::ReadBuffer;
 
@@ -9,7 +10,7 @@ enum Mode {
 	Send,
 	Receive,
 	List,
-	TestAT,
+	Conversation,
 }
 
 fn main() {
@@ -19,8 +20,8 @@ fn main() {
 	let mode = match args.next().expect("no mode provided").as_str() {
 		"send" => Mode::Send,
 		"recv" => Mode::Receive,
+		"conv" => Mode::Conversation,
 		"list" => Mode::List,
-		"test-at" => Mode::TestAT,
 		_ => panic!("unknown mode"),
 	};
 	
@@ -30,7 +31,7 @@ fn main() {
 		Mode::List => list(),
 		Mode::Send => send(path.as_str()),
 		Mode::Receive => receive(path.as_str()),
-		Mode::TestAT => test_at(path.as_str()),
+		Mode::Conversation => conversation(path.as_str()),
 	}
 }
 
@@ -71,7 +72,7 @@ fn receive(path: &str) {
 	println!("{text}");
 }
 
-fn test_at(path: &str) {
+fn conversation(path: &str) {
 	let mut port = serialport::new(path, BAUD_RATE)
 		.timeout(Duration::from_secs(10))
 		.open()
@@ -79,18 +80,27 @@ fn test_at(path: &str) {
 	
 	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
 	
+	let mut stdin_lines = io::stdin().lines();
+	
 	loop {
-		port.write(b"AT\r\n")
+		let line = stdin_lines.next()
+			.expect("couldn't read from stdin")
+			.expect("couldn't read from stdin");
+		
+		port.write(line.as_bytes())
 			.expect("couldn't write to port");
-		println!("> AT");
+		port.write(b"\r\n")
+			.expect("couldn't write to port");
+		println!("> {line}");
 		
 		let reply = buffer.read_while(&mut port, |chunk| {
-			!chunk.ends_with(&[b'\n'])
+			!chunk.contains(&b'\n')
 		}).expect("couldn't read from port");
 		
 		let reply_text = from_utf8(reply)
 			.expect("received invalid utf-8 reply");
 		
+		let reply_text = &reply_text[..reply_text.len() - 2]; // cut off `\r\n`
 		println!("< {reply_text}");
 		
 		thread::sleep(Duration::from_secs(2));
