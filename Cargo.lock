@@ -55,6 +55,9 @@ dependencies = [
 [[package]]
 name = "hoppy-tester"
 version = "0.1.0"
+dependencies = [
+ "read_buffer",
+]
 
 [[package]]
 name = "libc"
@@ -125,9 +128,9 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
 name = "read_buffer"
-version = "1.1.0"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfe3188299eabb3d27d9516804c3fb5832b2f7dd548cf80f8b9765b061794127"
+checksum = "7578e4c5e4db5fb6a2ebbbb9d0cef4dfa7fd69adfda8a9e46e8a63f61f53588d"
 
 [[package]]
 name = "regex"
