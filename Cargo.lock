@@ -57,6 +57,7 @@ name = "hoppy-tester"
 version = "0.1.0"
 dependencies = [
  "read_buffer",
+ "serialport",
 ]
 
 [[package]]
