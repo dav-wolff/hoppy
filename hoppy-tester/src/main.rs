@@ -2,7 +2,7 @@ use std::{io, thread};
 use std::io::{Read, Write};
 use std::time::Duration;
 use crate::command_parser::{Commands, CommandsError};
-use CommandsError::IoError;
+use CommandsError::*;
 use io::ErrorKind::TimedOut;
 
 mod command_parser;
@@ -38,13 +38,16 @@ fn main() {
 		let command = match command_result {
 			Ok(command) => command,
 			Err(IoError(TimedOut)) => continue,
-			Err(err) => {
-				todo!();
+			Err(LineTooLong | IncorrectLineEnding) => {
+				port.write(b"AT,ERR:SYMBLE")
+					.expect("couldn't write to port");
+				continue;
 			},
+			Err(IoError(kind)) => panic!("io error occurred trying to read a command: {kind}"),
 		};
 		
 		if let Err(err) = handle_command(&mut port, command) {
-			todo!();
+			panic!("io error occurred trying to handle a command: {err}");
 		}
 	}
 }
