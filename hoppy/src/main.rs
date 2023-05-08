@@ -1,6 +1,8 @@
 use std::str::from_utf8;
 use std::{io, thread};
-use std::io::Write;
+use std::io::{Read, Write};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use read_buffer::ReadBuffer;
 
@@ -73,36 +75,70 @@ fn receive(path: &str) {
 }
 
 fn conversation(path: &str) {
-	let mut port = serialport::new(path, BAUD_RATE)
-		.timeout(Duration::from_secs(10))
+	let port = serialport::new(path, BAUD_RATE)
+		.timeout(Duration::from_secs(1))
 		.open()
 		.expect("couldn't open serial port");
 	
-	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
+	let (tx, rx) = mpsc::channel();
 	
+	let reader = port.try_clone()
+		.expect("couldn't clone serial port");
+	
+	thread::scope(|s| {
+		s.spawn(|| listen_for_replies(reader, tx));
+		send_requests(port, rx);
+	});
+}
+
+fn send_requests(mut writer: impl Write, rx: Receiver<String>) {
 	let mut stdin_lines = io::stdin().lines();
 	
 	loop {
+		print!("> ");
+		let _ = io::stdout().flush();
+		
 		let line = stdin_lines.next()
 			.expect("couldn't read from stdin")
 			.expect("couldn't read from stdin");
 		
-		port.write(line.as_bytes())
+		writer.write(line.as_bytes())
 			.expect("couldn't write to port");
-		port.write(b"\r\n")
+		writer.write(b"\r\n")
 			.expect("couldn't write to port");
-		println!("> {line}");
 		
-		let reply = buffer.read_while(&mut port, |chunk| {
+		loop {
+			let Ok(reply_text) = rx.recv_timeout(Duration::from_secs(2)) else {
+				// timeout
+				break;
+			};
+			
+			println!("< {reply_text}");
+		}
+	}
+}
+
+fn listen_for_replies(mut reader: impl Read, tx: Sender<String>) {
+	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
+	
+	loop {
+		let reply = buffer.read_while(&mut reader, |chunk| {
 			!chunk.contains(&b'\n')
-		}).expect("couldn't read from port");
+		});
+		
+		let reply = match reply {
+			Ok(reply) => reply,
+			Err(err) => match err.kind() {
+				io::ErrorKind::TimedOut => continue,
+				_ => panic!("error reading from port: {err}"),
+			}
+		};
 		
 		let reply_text = from_utf8(reply)
 			.expect("received invalid utf-8 reply");
-		
 		let reply_text = &reply_text[..reply_text.len() - 2]; // cut off `\r\n`
-		println!("< {reply_text}");
 		
-		thread::sleep(Duration::from_secs(2));
+		tx.send(reply_text.to_owned())
+			.expect("could not send reply between threads");
 	}
 }
