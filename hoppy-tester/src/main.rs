@@ -39,7 +39,7 @@ fn main() {
 			Ok(command) => command,
 			Err(IoError(TimedOut)) => continue,
 			Err(LineTooLong | IncorrectLineEnding) => {
-				port.write(b"AT,ERR:SYMBLE")
+				port.write(b"AT,ERR:SYMBLE\r\n")
 					.expect("couldn't write to port");
 				continue;
 			},
