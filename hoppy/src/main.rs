@@ -136,9 +136,10 @@ fn listen_for_replies(mut reader: impl Read, tx: Sender<String>) {
 		
 		let reply_text = from_utf8(reply)
 			.expect("received invalid utf-8 reply");
-		let reply_text = &reply_text[..reply_text.len() - 2]; // cut off `\r\n`
 		
-		tx.send(reply_text.to_owned())
-			.expect("could not send reply between threads");
+		for line in reply_text.lines() {
+			tx.send(line.to_owned())
+				.expect("could not send reply between threads");
+		}
 	}
 }
