@@ -61,7 +61,7 @@ fn handle_command(mut port: impl Read + Write, state: &mut State, command: Vec<u
 	let reply = if command == b"AT" {
 		b"AT,OK\r\n".to_vec()
 	} else if command.starts_with(b"AT+SEND=") {
-		handle_send(&mut port, &command[8..])?.to_owned()
+		handle_send(&mut port, &state, &command[8..])?.to_owned()
 	} else if command.starts_with(b"AT+ADDR=") {
 		set_address(state, &command[8..])?.to_owned()
 	} else if command.starts_with(b"AT+ADDR?") {
@@ -85,7 +85,7 @@ struct State {
 	destination: Address,
 }
 
-fn handle_send(mut port: impl Read + Write, args: &[u8]) -> Result<&'static [u8], io::Error> {
+fn handle_send(mut port: impl Read + Write, state: &State, args: &[u8]) -> Result<&'static [u8], io::Error> {
 	let Ok(bytes_to_receive) = String::from_utf8_lossy(args).parse::<usize>() else {
 		return Ok(b"AT,ERR:PARA\r\n");
 	};
@@ -115,7 +115,12 @@ fn handle_send(mut port: impl Read + Write, args: &[u8]) -> Result<&'static [u8]
 		}
 	}
 	
-	println!("Received data: {:?}", String::from_utf8_lossy(&buffer));
+	println!(
+		"Sending {:?} from {} to {}",
+		String::from_utf8_lossy(&buffer),
+		String::from_utf8_lossy(state.address.as_ascii_bytes()),
+		String::from_utf8_lossy(state.destination.as_ascii_bytes())
+	);
 	
 	port.write(b"AT,SENDING\r\n")?;
 	thread::sleep(Duration::from_secs(1));
