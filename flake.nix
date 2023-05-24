@@ -25,5 +25,9 @@
         };
         default = all;
       };
+      
+      devShells.x86_64-linux = {
+        default = pkgs.callPackage ./shell.nix { };
+      };
     };
 }
