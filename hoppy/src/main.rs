@@ -88,6 +88,9 @@ fn conversation(path: &str) {
 	thread::scope(|s| {
 		s.spawn(|| listen_for_replies(reader, tx));
 		send_requests(port, rx);
+		
+		// easier than getting the thread to quit
+		std::process::exit(1);
 	});
 }
 
@@ -101,6 +104,10 @@ fn send_requests(mut writer: impl Write, rx: Receiver<String>) {
 		let line = stdin_lines.next()
 			.expect("couldn't read from stdin")
 			.expect("couldn't read from stdin");
+		
+		if line == "\\exit" {
+			break;
+		}
 		
 		writer.write(line.as_bytes())
 			.expect("couldn't write to port");
@@ -138,8 +145,10 @@ fn listen_for_replies(mut reader: impl Read, tx: Sender<String>) {
 			.expect("received invalid utf-8 reply");
 		
 		for line in reply_text.lines() {
-			tx.send(line.to_owned())
-				.expect("could not send reply between threads");
+			if tx.send(line.to_owned()).is_err() {
+				// send_requests received '\exit' and dropped the Receiver
+				break;
+			}
 		}
 	}
 }
