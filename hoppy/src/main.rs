@@ -1,4 +1,3 @@
-use std::str::from_utf8;
 use std::{io, thread};
 use std::io::{Read, Write};
 use std::sync::mpsc;
@@ -68,8 +67,7 @@ fn receive(path: &str) {
 	let data = buffer.read_from(&mut port)
 		.expect("couldn't read from serial port");
 	
-	let text = from_utf8(data)
-		.expect("received invalid utf-8 over serial port");
+	let text = String::from_utf8_lossy(data);
 	
 	println!("{text}");
 }
@@ -141,14 +139,11 @@ fn listen_for_replies(mut reader: impl Read, tx: Sender<String>) {
 			}
 		};
 		
-		let reply_text = from_utf8(reply)
-			.expect("received invalid utf-8 reply");
+		let reply_text = String::from_utf8_lossy(reply);
 		
 		for line in reply_text.lines() {
-			if tx.send(line.to_owned()).is_err() {
-				// send_requests received '\exit' and dropped the Receiver
-				break;
-			}
+			tx.send(line.to_owned())
+				.expect("could not send reply between threads");
 		}
 	}
 }
