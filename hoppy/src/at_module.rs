@@ -1,6 +1,7 @@
 use std::io;
 use serialport::SerialPort;
 use read_buffer::ReadBuffer;
+use super::at_config::ATConfig;
 
 pub struct ATModule {
 	port: Box<dyn SerialPort>,
@@ -8,11 +9,19 @@ pub struct ATModule {
 }
 
 impl ATModule {
-	pub fn new(port: Box<dyn SerialPort>) -> Self {
-		Self {
+	pub fn open(mut port: Box<dyn SerialPort>, config: ATConfig) -> Result<Self, io::Error> {
+		write!(port, "AT+CFG={config}\r\n")?;
+		
+		let mut module = Self {
 			port,
 			buffer: Default::default(),
+		};
+		
+		if module.read_line()? != b"AT,OK\r\n" {
+			return Err(io::ErrorKind::Other.into());
 		}
+		
+		Ok(module)
 	}
 	
 	fn read_line(&mut self) -> Result<&[u8], io::Error> {
