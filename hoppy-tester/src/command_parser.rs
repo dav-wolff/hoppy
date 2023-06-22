@@ -17,7 +17,7 @@ impl<R: Read> Commands<R> {
 		}
 	}
 	
-	fn read_data(&mut self) -> Option<Result<&[u8], CommandsError>> {
+	fn read_data(&mut self) -> Option<Result<&[u8], CommandParseError>> {
 		let data = self.buffer.read_while(
 			&mut self.reader,
 			|chunk| !chunk.contains(&b'\n')
@@ -50,7 +50,7 @@ impl<R: Read> Commands<R> {
 		self.overflow_buffer.extend_from_slice(&overflow); // could possibly avoid if ReadBuffer and Vec were better integrated
 	}
 	
-	fn next_command(&mut self) -> Option<Result<Vec<u8>, CommandsError>> {
+	fn next_command(&mut self) -> Option<Result<Vec<u8>, CommandParseError>> {
 		let command_and_overflow: &[u8] = if self.overflow_buffer.contains(&b'\n') {
 			&self.overflow_buffer
 		} else {
@@ -65,7 +65,7 @@ impl<R: Read> Commands<R> {
 			Self::split_at_first(command_and_overflow, b'\n')
 		else {
 			return if command_and_overflow.len() == self.buffer.capacity() {
-				Some(Err(CommandsError::LineTooLong))
+				Some(Err(CommandParseError::LineTooLong))
 			} else {
 				None
 			}
@@ -74,7 +74,7 @@ impl<R: Read> Commands<R> {
 		if !command.ends_with(b"\r\n") {
 			let overflow = overflow.to_owned(); // unfortunate memory allocation
 			self.save_overflow(overflow);
-			return Some(Err(CommandsError::IncorrectLineEnding))
+			return Some(Err(CommandParseError::IncorrectLineEnding))
 		}
 		
 		let command = &command[..command.len() - 2].to_owned(); // cut off `\r\n`
@@ -86,7 +86,7 @@ impl<R: Read> Commands<R> {
 }
 
 impl<R: Read> Iterator for Commands<R> {
-	type Item = Result<Vec<u8>, CommandsError>;
+	type Item = Result<Vec<u8>, CommandParseError>;
 	
 	fn next(&mut self) -> Option<Self::Item> {
 		self.next_command()
@@ -94,13 +94,13 @@ impl<R: Read> Iterator for Commands<R> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum CommandsError {
+pub enum CommandParseError {
 	IoError(io::ErrorKind),
 	LineTooLong,
 	IncorrectLineEnding,
 }
 
-impl From<io::Error> for CommandsError {
+impl From<io::Error> for CommandParseError {
 	fn from(err: io::Error) -> Self {
 		Self::IoError(err.kind())
 	}
@@ -151,7 +151,7 @@ mod tests {
 		let data = b"Line\n".as_slice();
 		let mut iter = Commands::in_stream(data);
 		
-		assert_eq!(iter.next(), Some(Err(CommandsError::IncorrectLineEnding)));
+		assert_eq!(iter.next(), Some(Err(CommandParseError::IncorrectLineEnding)));
 		assert_eq!(iter.next(), None);
 	}
 	
@@ -161,12 +161,12 @@ mod tests {
 		let mut iter = Commands::in_stream(data);
 		
 		assert_eq!(iter.next(), Some(Ok(b"First".to_vec())));
-		assert_eq!(iter.next(), Some(Err(CommandsError::IncorrectLineEnding)));
+		assert_eq!(iter.next(), Some(Err(CommandParseError::IncorrectLineEnding)));
 		assert_eq!(iter.next(), Some(Ok(b"Second".to_vec())));
-		assert_eq!(iter.next(), Some(Err(CommandsError::IncorrectLineEnding)));
-		assert_eq!(iter.next(), Some(Err(CommandsError::IncorrectLineEnding)));
+		assert_eq!(iter.next(), Some(Err(CommandParseError::IncorrectLineEnding)));
+		assert_eq!(iter.next(), Some(Err(CommandParseError::IncorrectLineEnding)));
 		assert_eq!(iter.next(), Some(Ok(b"Third".to_vec())));
-		assert_eq!(iter.next(), Some(Err(CommandsError::IncorrectLineEnding)));
+		assert_eq!(iter.next(), Some(Err(CommandParseError::IncorrectLineEnding)));
 		assert_eq!(iter.next(), None);
 	}
 }

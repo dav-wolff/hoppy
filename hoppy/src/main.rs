@@ -1,145 +1,43 @@
-use std::str::from_utf8;
-use std::{io, thread};
-use std::io::{Read, Write};
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
-use read_buffer::ReadBuffer;
+use at_config::{ATConfig, HeaderMode, ReceiveMode};
+use at_module::ATModule;
+
+mod at_config;
+mod at_module;
 
 const BAUD_RATE: u32 = 9600;
-
-enum Mode {
-	Send,
-	Receive,
-	List,
-	Conversation,
-}
 
 fn main() {
 	let mut args = std::env::args();
 	args.next(); // ignore first arg, which should be the executable's name
 	
-	let mode = match args.next().expect("no mode provided").as_str() {
-		"send" => Mode::Send,
-		"recv" => Mode::Receive,
-		"conv" => Mode::Conversation,
-		"list" => Mode::List,
-		_ => panic!("unknown mode"),
+	let path = args.next()
+		.expect("no path provided");
+
+	let port = serialport::new(path, BAUD_RATE)
+		.timeout(Duration::from_secs(2))
+		.open()
+		.expect("could not open serial port");
+	
+	let config = ATConfig {
+		frequency: 433920000,
+		power: 5,
+		bandwidth: 9,
+		spreading_factor: 7,
+		error_coding: 4,
+		crc: true,
+		header_mode: HeaderMode::Explicit,
+		receive_mode: ReceiveMode::Continue,
+		frequency_hop: false,
+		hop_period: 0,
+		receive_timeout: 3000,
+		payload_length: 8,
+		preamble_length: 8,
 	};
 	
-	let path = args.next().unwrap_or_default();
+	let mut module = ATModule::open(port, config)
+		.expect("could not open at module");
 	
-	match mode {
-		Mode::List => list(),
-		Mode::Send => send(path.as_str()),
-		Mode::Receive => receive(path.as_str()),
-		Mode::Conversation => conversation(path.as_str()),
-	}
-}
-
-fn list() {
-	let available_ports = serialport::available_ports()
-		.expect("couldn't list available ports");
-	
-	for port in available_ports {
-		let name = port.port_name;
-		let port_type = port.port_type;
-		
-		println!("{name}: {:?}", port_type);
-	}
-}
-
-fn send(path: &str) {
-	let mut port = serialport::new(path, BAUD_RATE)
-		.open()
-		.expect("couldn't open serial port");
-	
-	port.write("Hello world".as_bytes())
-		.expect("couldn't write to port");
-}
-
-fn receive(path: &str) {
-	let mut port = serialport::new(path, BAUD_RATE)
-		.timeout(Duration::from_secs(10))
-		.open()
-		.expect("couldn't open serial port");
-	
-	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
-	let data = buffer.read_from(&mut port)
-		.expect("couldn't read from serial port");
-	
-	let text = from_utf8(data)
-		.expect("received invalid utf-8 over serial port");
-	
-	println!("{text}");
-}
-
-fn conversation(path: &str) {
-	let port = serialport::new(path, BAUD_RATE)
-		.timeout(Duration::from_secs(1))
-		.open()
-		.expect("couldn't open serial port");
-	
-	let (tx, rx) = mpsc::channel();
-	
-	let reader = port.try_clone()
-		.expect("couldn't clone serial port");
-	
-	thread::scope(|s| {
-		s.spawn(|| listen_for_replies(reader, tx));
-		send_requests(port, rx);
-	});
-}
-
-fn send_requests(mut writer: impl Write, rx: Receiver<String>) {
-	let mut stdin_lines = io::stdin().lines();
-	
-	loop {
-		print!("> ");
-		let _ = io::stdout().flush();
-		
-		let line = stdin_lines.next()
-			.expect("couldn't read from stdin")
-			.expect("couldn't read from stdin");
-		
-		writer.write(line.as_bytes())
-			.expect("couldn't write to port");
-		writer.write(b"\r\n")
-			.expect("couldn't write to port");
-		
-		loop {
-			let Ok(reply_text) = rx.recv_timeout(Duration::from_secs(2)) else {
-				// timeout
-				break;
-			};
-			
-			println!("< {reply_text}");
-		}
-	}
-}
-
-fn listen_for_replies(mut reader: impl Read, tx: Sender<String>) {
-	let mut buffer: ReadBuffer<256> = ReadBuffer::new();
-	
-	loop {
-		let reply = buffer.read_while(&mut reader, |chunk| {
-			!chunk.contains(&b'\n')
-		});
-		
-		let reply = match reply {
-			Ok(reply) => reply,
-			Err(err) => match err.kind() {
-				io::ErrorKind::TimedOut => continue,
-				_ => panic!("error reading from port: {err}"),
-			}
-		};
-		
-		let reply_text = from_utf8(reply)
-			.expect("received invalid utf-8 reply");
-		
-		for line in reply_text.lines() {
-			tx.send(line.to_owned())
-				.expect("could not send reply between threads");
-		}
-	}
+	module.send(b"Holle world!")
+		.expect("could not send message");
 }
