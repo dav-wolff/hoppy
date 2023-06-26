@@ -39,8 +39,9 @@ fn main() {
 	
 	thread::scope(|s| {
 		let mut module = ATModule::open(&s, port, config, |message| {
+			let address = message.address;
 			let text = String::from_utf8_lossy(&message.data);
-			println!("Received message: {text}\n{message:?}");
+			println!("Received message from {address}: {text}");
 		}).expect("could not open AT module");
 		
 		module.send(b"Holle world!")

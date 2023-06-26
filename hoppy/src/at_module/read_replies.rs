@@ -4,6 +4,8 @@ use read_buffer::DynReadBuffer;
 
 use crate::hex_parse::parse_ascii_hex;
 
+use super::at_address::ATAddress;
+
 #[derive(Debug)]
 pub struct ATReply {
 	data: Box<[u8]>,
@@ -25,7 +27,7 @@ impl ATReply {
 
 #[derive(Debug)]
 pub struct ATMessage {
-	pub address: [u8; 4], // TODO create address type
+	pub address: ATAddress,
 	pub data: Box<[u8]>,
 }
 
@@ -77,7 +79,7 @@ fn read_lr<F>(buffer: &mut DynReadBuffer<impl Read>, callback: &mut F) -> Result
 	}
 	
 	let address = &header[..4];
-	let address = [address[0], address[1], address[2], address[3]];
+	let address = ATAddress::new([address[0], address[1], address[2], address[3]])?;
 	
 	let length = &header[5..=6];
 	let length = parse_ascii_hex(length)?;

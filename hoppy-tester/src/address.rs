@@ -33,8 +33,8 @@ impl Address {
 
 impl Default for Address {
 	fn default() -> Self {
-        Self {
+		Self {
 			bytes: *b"0000",
 		}
-    }
+	}
 }
