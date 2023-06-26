@@ -2,10 +2,13 @@ use std::{time::Duration, thread};
 use at_config::{ATConfig, HeaderMode, ReceiveMode};
 use at_module::{ATModule, at_address::ATAddress};
 
+use crate::aodv::parse_packet;
+
 mod hex_parse;
 mod no_timeout_reader;
 mod at_config;
 mod at_module;
+mod aodv;
 
 const BAUD_RATE: u32 = 9600;
 
@@ -45,6 +48,8 @@ fn main() {
 			let address = message.address;
 			let text = String::from_utf8_lossy(&message.data);
 			println!("Received message from {address}: {text}");
+			let packet = parse_packet(message);
+			println!("Packet: {packet:?}");
 		}).expect("could not open AT module");
 		
 		module.send(ATAddress::new(*b"1234").unwrap(), b"Holle world!")

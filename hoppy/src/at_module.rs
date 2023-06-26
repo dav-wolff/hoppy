@@ -2,11 +2,13 @@ pub mod at_address;
 
 mod read_replies;
 
+pub use read_replies::ATMessage;
+
 use std::{io::{self, ErrorKind}, thread, sync::mpsc::{self, Receiver}};
 use serialport::SerialPort;
 use crate::no_timeout_reader::NoTimeoutReader;
 
-use self::{read_replies::{ATMessage, ATReply}, at_address::ATAddress};
+use self::{read_replies::ATReply, at_address::ATAddress};
 
 use super::at_config::ATConfig;
 use read_replies::read_replies;
