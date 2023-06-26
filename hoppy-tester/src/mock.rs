@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::time::Duration;
 use crate::command_parser::{Commands, CommandParseError};
 use CommandParseError::*;
+use serialport::SerialPort;
 use super::address::Address;
 use io::ErrorKind::TimedOut;
 
@@ -14,7 +15,7 @@ pub fn mock(path: &str) {
 		.timeout(Duration::from_secs(1))
 		.open();
 	
-	let mut port = match port {
+	let port = match port {
 		Ok(port) => port,
 		Err(err) => {
 			eprintln!("Couldn't open `{path}`: {err}");
@@ -22,6 +23,45 @@ pub fn mock(path: &str) {
 		}
 	};
 	
+	let writer = port.try_clone()
+		.expect("couldn't clone serial port");
+	
+	thread::scope(|s| {
+		s.spawn(|| mock_send(writer));
+		mock_receive(port);
+		
+		// easier than getting the thread to quit
+		std::process::exit(0);
+	});
+}
+
+fn mock_receive(mut writer: impl Write) {
+	let mut stdin_lines = io::stdin().lines();
+	
+	loop {
+		let line = stdin_lines.next()
+			.expect("couldn't read from stdin")
+			.expect("couldn't read from stdin");
+		
+		if line == "\\exit" {
+			break;
+		}
+		
+		bytes_received(&mut writer, line.as_bytes());
+	}
+}
+
+fn bytes_received(mut writer: impl Write, bytes: &[u8]) {
+	let length = bytes.len();
+	
+	// source address hard-coded to '1234' for now
+	write!(writer, "LR,1234,{length:02X},")
+		.expect("couldn't write to port");
+	writer.write(bytes)
+		.expect("couldn't write to port");
+}
+
+fn mock_send(mut port: Box<dyn SerialPort>) {
 	let reader = port.try_clone()
 		.expect("couldn't clone serial port");
 	

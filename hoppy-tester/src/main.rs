@@ -36,7 +36,7 @@ fn main() {
 	let path = args.next().unwrap_or_default();
 	
 	match mode {
-        Mode::Mock => mock(&path),
+		Mode::Mock => mock(&path),
 		Mode::List => list(),
 		Mode::Send => send(&path),
 		Mode::Receive => receive(&path),

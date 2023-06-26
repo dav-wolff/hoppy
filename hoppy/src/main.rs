@@ -1,7 +1,9 @@
-use std::time::Duration;
+use std::{time::Duration, thread};
 use at_config::{ATConfig, HeaderMode, ReceiveMode};
 use at_module::ATModule;
 
+mod hex_parse;
+mod no_timeout_reader;
 mod at_config;
 mod at_module;
 
@@ -13,9 +15,9 @@ fn main() {
 	
 	let path = args.next()
 		.expect("no path provided");
-
+	
 	let port = serialport::new(path, BAUD_RATE)
-		.timeout(Duration::from_secs(2))
+		.timeout(Duration::from_secs(10))
 		.open()
 		.expect("could not open serial port");
 	
@@ -35,9 +37,13 @@ fn main() {
 		preamble_length: 8,
 	};
 	
-	let mut module = ATModule::open(port, config)
-		.expect("could not open at module");
-	
-	module.send(b"Holle world!")
-		.expect("could not send message");
+	thread::scope(|s| {
+		let mut module = ATModule::open(&s, port, config, |message| {
+			let text = String::from_utf8_lossy(&message.data);
+			println!("Received message: {text}\n{message:?}");
+		}).expect("could not open AT module");
+		
+		module.send(b"Holle world!")
+			.expect("could not send message");
+	});
 }

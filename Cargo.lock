@@ -129,9 +129,9 @@ checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
 name = "read_buffer"
-version = "1.2.0"
+version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7578e4c5e4db5fb6a2ebbbb9d0cef4dfa7fd69adfda8a9e46e8a63f61f53588d"
+checksum = "b41b1eb1b5168ec9724fcb2f24afc6db0ecec79886fa9b0262166c2e8d9299c4"
 
 [[package]]
 name = "regex"
