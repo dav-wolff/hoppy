@@ -11,7 +11,7 @@ impl Address {
 		}
 		
 		for byte in ascii {
-			if !(b'0'..b'9').contains(byte) && !(b'A'..b'Z').contains(byte) {
+			if !(b'0'..=b'9').contains(byte) && !(b'A'..=b'F').contains(byte) {
 				return Err(io::ErrorKind::InvalidData.into());
 			}
 		}

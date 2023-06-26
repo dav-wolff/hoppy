@@ -121,7 +121,7 @@ fn handle_command(mut port: impl Read + Write, state: &mut State, command: Vec<u
 	} else {
 		b"AT,ERR:CMD\r\n".to_vec()
 	};
-
+	
 	port.write_all(&reply)?;
 	
 	Ok(())
