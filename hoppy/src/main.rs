@@ -1,6 +1,6 @@
 use std::{time::Duration, thread};
 use at_config::{ATConfig, HeaderMode, ReceiveMode};
-use at_module::ATModule;
+use at_module::{ATModule, at_address::ATAddress};
 
 mod hex_parse;
 mod no_timeout_reader;
@@ -37,14 +37,17 @@ fn main() {
 		preamble_length: 8,
 	};
 	
+	let address = ATAddress::new(*b"4290")
+		.expect("address literal should be valid");
+	
 	thread::scope(|s| {
-		let mut module = ATModule::open(&s, port, config, |message| {
+		let mut module = ATModule::open(s, port, address, config, |message| {
 			let address = message.address;
 			let text = String::from_utf8_lossy(&message.data);
 			println!("Received message from {address}: {text}");
 		}).expect("could not open AT module");
 		
-		module.send(b"Holle world!")
+		module.send(ATAddress::new(*b"1234").unwrap(), b"Holle world!")
 			.expect("could not send message");
 	});
 }
