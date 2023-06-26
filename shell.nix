@@ -1,11 +1,17 @@
 { pkgs ? import <nixpkgs> { } }:
-pkgs.mkShell {
- 	inputsFrom = [
-    (pkgs.callPackage ./. { inherit pkgs; }).hoppy
-  ];
-  
-  buildInputs = with pkgs; [
+let
+	apps = pkgs.callPackage ./. {
+		inherit pkgs;
+	};
+in pkgs.mkShell {
+	inputsFrom = [
+		apps.hoppy
+	];
+	
+	buildInputs = with pkgs; [
 		rust-analyzer
 		clippy
+		apps.hoppy
+		apps.hoppy-tester
 	];
 }
