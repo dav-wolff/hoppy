@@ -82,7 +82,7 @@ fn read_lr<F>(buffer: &mut DynReadBuffer<impl Read>, callback: &mut F) -> Result
 	let address = ATAddress::new([address[0], address[1], address[2], address[3]])?;
 	
 	let length = &header[5..=6];
-	let length = parse_ascii_hex(length)?;
+	let length: u8 = parse_ascii_hex(length)?;
 	
 	let data = buffer.read_bytes(length as usize)?;
 	
