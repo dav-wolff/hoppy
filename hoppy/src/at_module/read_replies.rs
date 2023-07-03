@@ -2,7 +2,7 @@ use std::{io::{Read, self, ErrorKind}, sync::mpsc::Sender};
 
 use read_buffer::DynReadBuffer;
 
-use crate::hex_parse::parse_ascii_hex;
+use crate::hex::parse_ascii_hex;
 
 use super::at_address::ATAddress;
 

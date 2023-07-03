@@ -1,6 +1,6 @@
 use std::io::{self, ErrorKind};
 
-use crate::{at_module::{ATMessage, at_address::ATAddress}, hex_parse::{parse_ascii_hex, Integer}};
+use crate::{at_module::{ATMessage, at_address::ATAddress}, hex::{parse_ascii_hex, Integer, encode_ascii_hex}};
 
 #[derive(Debug)]
 pub enum AODVPacket {
@@ -9,6 +9,20 @@ pub enum AODVPacket {
 	RouteError(RouteErrorPacket),
 	Data(DataPacket),
 	DataAcknowledge(DataAcknowledgePacket),
+}
+
+impl AODVPacket {
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		use AODVPacket::*;
+		
+		match self {
+			RouteRequest(packet) => packet.to_bytes(),
+			RouteReply(packet) => packet.to_bytes(),
+			RouteError(packet) => packet.to_bytes(),
+			Data(packet) => packet.to_bytes(),
+			DataAcknowledge(packet) => packet.to_bytes(),
+		}
+	}
 }
 
 fn take_bytes<'a>(data: &mut &'a[u8], amount: usize) -> Result<&'a[u8], io::Error> {
@@ -66,6 +80,19 @@ impl RouteRequestPacket {
 			origin_sequence: take_int(&mut data, 4)?,
 		})
 	}
+	
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let mut data = Vec::with_capacity(23);
+		data.push(b'0');
+		data.extend(encode_ascii_hex(self.hop_count));
+		data.extend(encode_ascii_hex(self.id));
+		data.extend_from_slice(self.destination.as_bytes());
+		data.extend(encode_ascii_hex(self.destination_sequence));
+		data.extend_from_slice(self.origin.as_bytes());
+		data.extend(encode_ascii_hex(self.origin_sequence));
+		
+		data.into()
+	}
 }
 
 #[derive(Debug)]
@@ -85,6 +112,17 @@ impl RouteReplyPacket {
 			origin: take_address(&mut data)?,
 		})
 	}
+	
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let mut data = Vec::with_capacity(15);
+		data.push(b'1');
+		data.extend(encode_ascii_hex(self.hop_count));
+		data.extend_from_slice(self.destination.as_bytes());
+		data.extend(encode_ascii_hex(self.destination_sequence));
+		data.extend_from_slice(self.origin.as_bytes());
+		
+		data.into()
+	}
 }
 
 #[derive(Debug)]
@@ -101,6 +139,16 @@ impl RouteErrorPacket {
 			destination: take_address(&mut data)?,
 			destination_sequence: take_int(&mut data, 4)?,
 		})
+	}
+	
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let mut data = Vec::with_capacity(11);
+		data.push(b'2');
+		data.extend(encode_ascii_hex(self.destination_count));
+		data.extend_from_slice(self.destination.as_bytes());
+		data.extend(encode_ascii_hex(self.destination_sequence));
+		
+		data.into()
 	}
 }
 
@@ -121,6 +169,17 @@ impl DataPacket {
 			payload: data.into(),
 		})
 	}
+	
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let mut data = Vec::with_capacity(11 + self.payload.len());
+		data.push(b'3');
+		data.extend_from_slice(self.destination.as_bytes());
+		data.extend_from_slice(self.origin.as_bytes());
+		data.extend(encode_ascii_hex(self.sequence));
+		data.extend_from_slice(&self.payload);
+		
+		data.into()
+	}
 }
 
 #[derive(Debug)]
@@ -137,5 +196,15 @@ impl DataAcknowledgePacket {
 			origin: take_address(&mut data)?,
 			sequence: take_int(&mut data, 2)?,
 		})
+	}
+	
+	pub fn to_bytes(&self) -> Box<[u8]> {
+		let mut data = Vec::with_capacity(11);
+		data.push(b'4');
+		data.extend_from_slice(self.destination.as_bytes());
+		data.extend_from_slice(self.origin.as_bytes());
+		data.extend(encode_ascii_hex(self.sequence));
+		
+		data.into()
 	}
 }

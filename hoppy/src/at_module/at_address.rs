@@ -1,6 +1,6 @@
-use std::{io::{self, ErrorKind}, ops::RangeInclusive, fmt::{Display, self}, str};
+use std::{io::{self, ErrorKind}, ops::RangeInclusive, fmt::{Debug, Display, self}, str};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct ATAddress ([u8; 4]);
 
 impl ATAddress {
@@ -11,6 +11,10 @@ impl ATAddress {
 		
 		Ok(Self(data))
 	}
+	
+	pub fn as_bytes(&self) -> &[u8] {
+		&self.0
+	}
 }
 
 impl Display for ATAddress {
@@ -19,6 +23,12 @@ impl Display for ATAddress {
 			.expect("address should always be valid ASCII");
 		
 		write!(f, "{text}")
+	}
+}
+
+impl Debug for ATAddress {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "ATAddress({self})")
 	}
 }
 

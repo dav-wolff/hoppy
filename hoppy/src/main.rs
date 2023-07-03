@@ -1,10 +1,10 @@
-use std::{time::Duration, thread};
+use std::{time::Duration, thread, sync::mpsc};
 use at_config::{ATConfig, HeaderMode, ReceiveMode};
 use at_module::{ATModule, at_address::ATAddress};
 
 use crate::aodv::parse_packet;
 
-mod hex_parse;
+mod hex;
 mod no_timeout_reader;
 mod at_config;
 mod at_module;
@@ -43,16 +43,31 @@ fn main() {
 	let address = ATAddress::new(*b"4290")
 		.expect("address literal should be valid");
 	
+	let (packet_sender, packet_receiver) = mpsc::channel();
+	
 	thread::scope(|s| {
-		let mut module = ATModule::open(s, port, address, config, |message| {
+		let mut module = ATModule::open(s, port, address, config, move |message| {
 			let address = message.address;
 			let text = String::from_utf8_lossy(&message.data);
 			println!("Received message from {address}: {text}");
+			
 			let packet = parse_packet(message);
-			println!("Packet: {packet:?}");
+			println!("Packet: {packet:#?}");
+			
+			let Ok(packet) = packet else {
+				return;
+			};
+			
+			packet_sender.send(packet.to_bytes())
+				.expect("channel closed");
 		}).expect("could not open AT module");
 		
 		module.send(ATAddress::new(*b"1234").unwrap(), b"Holle world!")
 			.expect("could not send message");
+		
+		for packet in packet_receiver {
+			module.send(ATAddress::new(*b"ABCD").unwrap(), &packet)
+				.expect("could not send packet");
+		}
 	});
 }

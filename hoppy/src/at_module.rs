@@ -4,7 +4,7 @@ mod read_replies;
 
 pub use read_replies::ATMessage;
 
-use std::{io::{self, ErrorKind}, thread, sync::mpsc::{self, Receiver}};
+use std::{io::{self, ErrorKind}, thread, sync::{mpsc::{self, Receiver}, MutexGuard}, marker::PhantomData};
 use serialport::SerialPort;
 use crate::no_timeout_reader::NoTimeoutReader;
 
@@ -13,9 +13,12 @@ use self::{read_replies::ATReply, at_address::ATAddress};
 use super::at_config::ATConfig;
 use read_replies::read_replies;
 
+type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
+
 pub struct ATModule {
 	port: Box<dyn SerialPort>,
 	receiver: Receiver<ATReply>,
+	_unsend: PhantomUnsend, // SerialPort seems to deadlock when called from different threads
 }
 
 impl ATModule {
@@ -40,6 +43,7 @@ impl ATModule {
 		let mut module = Self {
 			port,
 			receiver,
+			_unsend: Default::default(),
 		};
 		
 		write!(module.port, "AT+CFG={config}\r\n")?;
