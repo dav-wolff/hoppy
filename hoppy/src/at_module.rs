@@ -117,4 +117,8 @@ impl ATModule {
 		
 		Ok(())
 	}
+	
+	pub fn broadcast(&mut self, data: &[u8]) -> Result<(), io::Error> {
+		self.send(ATAddress::BROADCAST, data)
+	}
 }

@@ -4,7 +4,14 @@ use std::{io::{self, ErrorKind}, ops::RangeInclusive, fmt::{Debug, Display, self
 pub struct ATAddress ([u8; 4]);
 
 impl ATAddress {
+	pub(super) const BROADCAST: ATAddress = ATAddress(*b"FFFF");
+	
 	pub fn new(data: [u8; 4]) -> Result<Self, io::Error> {
+		// broadcast address not allowed as a regular address
+		if data == *b"FFFF" {
+			return Err(ErrorKind::InvalidData.into());
+		}
+		
 		if !is_hex_digits(&data) {
 			return Err(ErrorKind::InvalidData.into());
 		}
