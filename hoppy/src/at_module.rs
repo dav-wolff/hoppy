@@ -14,38 +14,37 @@ use self::{read_replies::ATReply, at_address::ATAddress};
 
 use read_replies::read_replies;
 
-type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
-
-pub struct ATModule {
+pub struct ATModuleBuilder<'scope, 'env> {
+	scope: &'scope thread::Scope<'scope, 'env>,
 	port: Box<dyn SerialPort>,
-	receiver: Receiver<ATReply>,
-	_unsend: PhantomUnsend, // SerialPort seems to deadlock when called from different threads
+	address: ATAddress,
+	config: ATConfig,
 }
 
-impl ATModule {
-	pub fn open<'scope, F>(
-		scope: &'scope thread::Scope<'scope, '_>,
-		port: Box<dyn SerialPort>,
-		address: ATAddress,
-		config: ATConfig,
+impl<'scope, 'env> ATModuleBuilder<'scope, 'env> {
+	pub fn open<F>(
+		self,
 		message_callback: F
-	) -> Result<Self, io::Error>
+	) -> Result<ATModule, io::Error>
 		where F: FnMut(ATMessage) + Send + 'scope
 	{
-		let reader = port.try_clone()?;
+		let reader = self.port.try_clone()?;
 		let reader = NoTimeoutReader::new(reader);
 		
 		let (sender, receiver) = mpsc::channel();
 		
-		scope.spawn(|| {
+		self.scope.spawn(|| {
 			read_replies(reader, sender, message_callback);
 		});
 		
-		let mut module = Self {
-			port,
+		let mut module = ATModule {
+			port: self.port,
 			receiver,
 			_unsend: Default::default(),
 		};
+		
+		let config = self.config;
+		let address = self.address;
 		
 		write!(module.port, "AT+CFG={config}\r\n")?;
 		
@@ -60,6 +59,30 @@ impl ATModule {
 		}
 		
 		Ok(module)
+	}
+}
+
+type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
+
+pub struct ATModule {
+	port: Box<dyn SerialPort>,
+	receiver: Receiver<ATReply>,
+	_unsend: PhantomUnsend, // SerialPort seems to deadlock when called from different threads
+}
+
+impl ATModule {
+	pub fn builder<'scope, 'env>(
+		scope: &'scope thread::Scope<'scope, 'env>,
+		port: Box<dyn SerialPort>,
+		address: ATAddress,
+		config: ATConfig,
+	) -> ATModuleBuilder<'scope, 'env> {
+		ATModuleBuilder {
+			scope,
+			port,
+			address,
+			config,
+		}
 	}
 	
 	fn read_reply(&mut self) -> ATReply {

@@ -1,7 +1,6 @@
-use std::{time::Duration, thread, sync::mpsc};
+use std::{time::Duration, thread};
+use aodv::AODVController;
 use at_module::{ATModule, at_address::ATAddress, ATConfig, HeaderMode, ReceiveMode};
-
-use crate::aodv::packets::parse_packet;
 
 mod hex;
 mod no_timeout_reader;
@@ -41,31 +40,10 @@ fn main() {
 	let address = ATAddress::new(*b"4290")
 		.expect("address literal should be valid");
 	
-	let (packet_sender, packet_receiver) = mpsc::channel();
-	
 	thread::scope(|s| {
-		let mut module = ATModule::open(s, port, address, config, move |message| {
-			let address = message.address;
-			let text = String::from_utf8_lossy(&message.data);
-			println!("Received message from {address}: {text}");
-			
-			let packet = parse_packet(message);
-			println!("Packet: {packet:#?}");
-			
-			let Ok(packet) = packet else {
-				return;
-			};
-			
-			packet_sender.send(packet.to_bytes())
-				.expect("channel closed");
-		}).expect("could not open AT module");
+		let module_builder = ATModule::builder(s, port, address, config);
 		
-		module.send(ATAddress::new(*b"1234").unwrap(), b"Holle world!")
-			.expect("could not send message");
-		
-		for packet in packet_receiver {
-			module.send(ATAddress::new(*b"ABCD").unwrap(), &packet)
-				.expect("could not send packet");
-		}
+		let controller = AODVController::start(module_builder)
+			.expect("failed to start aodv controller");
 	});
 }
