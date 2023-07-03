@@ -64,18 +64,33 @@ pub struct RouteRequestPacket {
 	id: u16,
 	hop_count: u8,
 	destination: ATAddress,
-	destination_sequence: u16,
+	destination_sequence: Option<u16>,
 	origin: ATAddress,
 	origin_sequence: u16,
 }
 
 impl RouteRequestPacket {
 	fn parse_from(mut data: &[u8]) -> Result<Self, io::Error> {
+		let unknown_destination_sequence = match take_bytes(&mut data, 1)? {
+			b"Y" => true,
+			b"N" => false,
+			_ => return Err(ErrorKind::InvalidData.into()),
+		};
+		
 		Ok(Self {
 			hop_count: take_int(&mut data, 2)?,
 			id: take_int(&mut data, 4)?,
 			destination: take_address(&mut data)?,
-			destination_sequence: take_int(&mut data, 4)?,
+			destination_sequence: {
+				// make sure to always read out the sequence number, in order to move past those bytes of data
+				let sequence = take_int(&mut data, 4)?;
+				
+				if unknown_destination_sequence {
+					None
+				} else {
+					Some(sequence)
+				}
+			},
 			origin: take_address(&mut data)?,
 			origin_sequence: take_int(&mut data, 4)?,
 		})
@@ -84,10 +99,15 @@ impl RouteRequestPacket {
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let mut data = Vec::with_capacity(23);
 		data.push(b'0');
+		data.push(if self.destination_sequence.is_none() {
+			b'Y'
+		} else {
+			b'N'
+		});
 		data.extend(encode_ascii_hex(self.hop_count));
 		data.extend(encode_ascii_hex(self.id));
 		data.extend_from_slice(self.destination.as_bytes());
-		data.extend(encode_ascii_hex(self.destination_sequence));
+		data.extend(encode_ascii_hex(self.destination_sequence.unwrap_or_default()));
 		data.extend_from_slice(self.origin.as_bytes());
 		data.extend(encode_ascii_hex(self.origin_sequence));
 		
