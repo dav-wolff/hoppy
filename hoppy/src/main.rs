@@ -1,12 +1,10 @@
 use std::{time::Duration, thread, sync::mpsc};
-use at_config::{ATConfig, HeaderMode, ReceiveMode};
-use at_module::{ATModule, at_address::ATAddress};
+use at_module::{ATModule, at_address::ATAddress, ATConfig, HeaderMode, ReceiveMode};
 
-use crate::aodv::parse_packet;
+use crate::aodv::packets::parse_packet;
 
 mod hex;
 mod no_timeout_reader;
-mod at_config;
 mod at_module;
 mod aodv;
 

@@ -1,7 +1,9 @@
 pub mod at_address;
 
+mod config;
 mod read_replies;
 
+pub use config::*;
 pub use read_replies::ATMessage;
 
 use std::{io::{self, ErrorKind}, thread, sync::{mpsc::{self, Receiver}, MutexGuard}, marker::PhantomData};
@@ -10,7 +12,6 @@ use crate::no_timeout_reader::NoTimeoutReader;
 
 use self::{read_replies::ATReply, at_address::ATAddress};
 
-use super::at_config::ATConfig;
 use read_replies::read_replies;
 
 type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
