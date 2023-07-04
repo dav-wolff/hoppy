@@ -28,23 +28,31 @@ impl<'scope, 'env> ATModuleBuilder<'scope, 'env> {
 	) -> Result<ATModule, io::Error>
 		where F: FnMut(ATMessage) + Send + 'scope
 	{
-		let reader = self.port.try_clone()?;
+		let ATModuleBuilder {
+			scope,
+			port,
+			address,
+			config
+		} = self;
+		
+		let reader = port.try_clone()?;
 		let reader = NoTimeoutReader::new(reader);
 		
 		let (sender, receiver) = mpsc::channel();
 		
-		self.scope.spawn(|| {
+		scope.spawn(|| {
 			read_replies(reader, sender, message_callback);
 		});
 		
 		let mut module = ATModule {
-			port: self.port,
+			port,
 			receiver,
+			address,
 			_unsend: Default::default(),
 		};
 		
-		let config = self.config;
-		let address = self.address;
+		let config = config;
+		let address = address;
 		
 		write!(module.port, "AT+CFG={config}\r\n")?;
 		
@@ -66,6 +74,7 @@ type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
 
 pub struct ATModule {
 	port: Box<dyn SerialPort>,
+	address: ATAddress,
 	receiver: Receiver<ATReply>,
 	_unsend: PhantomUnsend, // SerialPort seems to deadlock when called from different threads
 }
@@ -83,6 +92,10 @@ impl ATModule {
 			address,
 			config,
 		}
+	}
+	
+	pub fn address(&self) -> ATAddress {
+		self.address
 	}
 	
 	fn read_reply(&mut self) -> ATReply {

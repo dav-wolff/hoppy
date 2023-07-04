@@ -43,7 +43,10 @@ fn main() {
 	thread::scope(|s| {
 		let module_builder = ATModule::builder(s, port, address, config);
 		
-		let controller = AODVController::start(module_builder)
+		let mut controller = AODVController::start(module_builder)
 			.expect("failed to start aodv controller");
+		
+		controller.send(ATAddress::new(*b"1234").unwrap(), b"Test data".to_owned().into())
+			.expect("could not send test message");
 	});
 }

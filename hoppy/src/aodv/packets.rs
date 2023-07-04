@@ -61,12 +61,12 @@ pub fn parse_packet(message: ATMessage) -> Result<AODVPacket, io::Error> {
 
 #[derive(Debug)]
 pub struct RouteRequestPacket {
-	id: u16,
-	hop_count: u8,
-	destination: ATAddress,
-	destination_sequence: Option<u16>,
-	origin: ATAddress,
-	origin_sequence: u16,
+	pub id: u16,
+	pub hop_count: u8,
+	pub destination: ATAddress,
+	pub destination_sequence: Option<u16>,
+	pub origin: ATAddress,
+	pub origin_sequence: u16,
 }
 
 impl RouteRequestPacket {
@@ -117,10 +117,10 @@ impl RouteRequestPacket {
 
 #[derive(Debug)]
 pub struct RouteReplyPacket {
-	hop_count: u8,
-	destination: ATAddress,
-	destination_sequence: u16,
-	origin: ATAddress,
+	pub hop_count: u8,
+	pub destination: ATAddress,
+	pub destination_sequence: u16,
+	pub origin: ATAddress,
 }
 
 impl RouteReplyPacket {
@@ -147,9 +147,9 @@ impl RouteReplyPacket {
 
 #[derive(Debug)]
 pub struct RouteErrorPacket {
-	destination: ATAddress,
-	destination_sequence: u16,
-	destination_count: u8,
+	pub destination: ATAddress,
+	pub destination_sequence: u16,
+	pub destination_count: u8,
 }
 
 impl RouteErrorPacket {
@@ -174,10 +174,10 @@ impl RouteErrorPacket {
 
 #[derive(Debug)]
 pub struct DataPacket {
-	destination: ATAddress,
-	origin: ATAddress,
-	sequence: u8,
-	payload: Box<[u8]>,
+	pub destination: ATAddress,
+	pub origin: ATAddress,
+	pub sequence: u8,
+	pub payload: Box<[u8]>,
 }
 
 impl DataPacket {
@@ -204,9 +204,9 @@ impl DataPacket {
 
 #[derive(Debug)]
 pub struct DataAcknowledgePacket {
-	destination: ATAddress,
-	origin: ATAddress,
-	sequence: u8,
+	pub destination: ATAddress,
+	pub origin: ATAddress,
+	pub sequence: u8,
 }
 
 impl DataAcknowledgePacket {
