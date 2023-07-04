@@ -4,7 +4,7 @@ use read_buffer::DynReadBuffer;
 
 use crate::hex::parse_ascii_hex;
 
-use super::at_address::ATAddress;
+use super::{at_address::ATAddress, ATMessage};
 
 #[derive(Debug)]
 pub struct ATReply {
@@ -23,12 +23,6 @@ impl ATReply {
 	pub fn is_sent(&self) -> bool {
 		&*self.data == b"SENDED"
 	}
-}
-
-#[derive(Debug)]
-pub struct ATMessage {
-	pub address: ATAddress,
-	pub data: Box<[u8]>,
 }
 
 pub fn read_replies<F>(reader: impl Read, sender: Sender<ATReply>, mut callback: F)
