@@ -1,6 +1,6 @@
 use std::{io::{self, ErrorKind}, ops::RangeInclusive, fmt::{Debug, Display, self}, str};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ATAddress ([u8; 4]);
 
 impl ATAddress {

@@ -1,13 +1,16 @@
 mod packets;
+mod routing_table;
 
 use std::io;
 
 use crate::at_module::{ATModuleBuilder, ATModule, at_address::ATAddress};
 
 use packets::*;
+use routing_table::RoutingTable;
 
 pub struct AODVController {
 	at_module: ATModule,
+	routing_table: RoutingTable,
 }
 
 impl AODVController {
@@ -24,10 +27,14 @@ impl AODVController {
 		
 		Ok(Self {
 			at_module,
+			routing_table: RoutingTable::new(),
 		})
 	}
 	
 	pub fn send(&mut self, address: ATAddress, data: Box<[u8]>) -> Result<(), io::Error> {
+		let next_hop = self.routing_table.get_route(address)
+			.expect("could not find a route");
+		
 		let packet = DataPacket {
 			destination: address,
 			origin: self.at_module.address(),
@@ -35,6 +42,6 @@ impl AODVController {
 			payload: data,
 		};
 		
-		self.at_module.broadcast(&packet.to_bytes())
+		self.at_module.send(next_hop, &packet.to_bytes())
 	}
 }
