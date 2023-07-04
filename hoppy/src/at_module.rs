@@ -6,7 +6,7 @@ mod read_replies;
 pub use config::*;
 pub use read_replies::ATMessage;
 
-use std::{io::{self, ErrorKind}, thread, sync::{mpsc::{self, Receiver}, MutexGuard}, marker::PhantomData};
+use std::{io::{self, ErrorKind}, thread, sync::mpsc::{self, Receiver}};
 use serialport::SerialPort;
 use crate::no_timeout_reader::NoTimeoutReader;
 
@@ -14,84 +14,73 @@ use self::{read_replies::ATReply, at_address::ATAddress};
 
 use read_replies::read_replies;
 
-pub struct ATModuleBuilder<'scope, 'env> {
-	scope: &'scope thread::Scope<'scope, 'env>,
+pub struct ATModuleBuilder {
 	port: Box<dyn SerialPort>,
 	address: ATAddress,
-	config: ATConfig,
+	reply_receiver: Receiver<ATReply>,
+	message_receiver: Receiver<ATMessage>,
 }
 
-impl<'scope, 'env> ATModuleBuilder<'scope, 'env> {
-	pub fn open<F>(
-		self,
-		message_callback: F
-	) -> Result<ATModule, io::Error>
-		where F: FnMut(ATMessage) + Send + 'scope
-	{
-		let ATModuleBuilder {
-			scope,
-			port,
-			address,
-			config
-		} = self;
-		
-		let reader = port.try_clone()?;
-		let reader = NoTimeoutReader::new(reader);
-		
-		let (sender, receiver) = mpsc::channel();
-		
-		scope.spawn(|| {
-			read_replies(reader, sender, message_callback);
-		});
-		
-		let mut module = ATModule {
-			port,
-			receiver,
-			address,
-			_unsend: Default::default(),
+impl ATModuleBuilder {
+	pub fn build(self) -> (ATModule, Receiver<ATMessage>) {
+		let module = ATModule {
+			port: self.port,
+			address: self.address,
+			reply_receiver: self.reply_receiver,
 		};
 		
-		let config = config;
-		let address = address;
+		let message_receiver = self.message_receiver;
 		
-		write!(module.port, "AT+CFG={config}\r\n")?;
-		
-		if !module.read_reply().is_ok() {
-			return Err(ErrorKind::Other.into());
-		}
-		
-		write!(module.port, "AT+ADDR={address}\r\n")?;
-		
-		if !module.read_reply().is_ok() {
-			return Err(ErrorKind::Other.into());
-		}
-		
-		Ok(module)
+		(module, message_receiver)
 	}
 }
-
-type PhantomUnsend = PhantomData<MutexGuard<'static, ()>>;
 
 pub struct ATModule {
 	port: Box<dyn SerialPort>,
 	address: ATAddress,
-	receiver: Receiver<ATReply>,
-	_unsend: PhantomUnsend, // SerialPort seems to deadlock when called from different threads
+	reply_receiver: Receiver<ATReply>,
 }
 
 impl ATModule {
-	pub fn builder<'scope, 'env>(
-		scope: &'scope thread::Scope<'scope, 'env>,
-		port: Box<dyn SerialPort>,
+	pub fn open<'scope>(
+		scope: &'scope thread::Scope<'scope, '_>,
+		mut port: Box<dyn SerialPort>,
 		address: ATAddress,
 		config: ATConfig,
-	) -> ATModuleBuilder<'scope, 'env> {
-		ATModuleBuilder {
-			scope,
+	) -> Result<ATModuleBuilder, io::Error> {
+		let reader = port.try_clone()?;
+		let reader = NoTimeoutReader::new(reader);
+		
+		let (reply_sender, reply_receiver) = mpsc::channel();
+		let (message_sender, message_receiver) = mpsc::channel();
+		
+		scope.spawn(|| {
+			read_replies(reader, reply_sender, message_sender);
+		});
+		
+		let read_reply = || {
+			reply_receiver.recv()
+				.expect("mpsc sender should not disconnect")
+		};
+		
+		write!(port, "AT+CFG={config}\r\n")?;
+		
+		if !read_reply().is_ok() {
+			return Err(ErrorKind::Other.into());
+		}
+		
+		write!(port, "AT+ADDR={address}\r\n")?;
+		
+		if !read_reply().is_ok() {
+			return Err(ErrorKind::Other.into());
+		}
+		
+		Ok(ATModuleBuilder {
 			port,
 			address,
-			config,
-		}
+			reply_receiver,
+			message_receiver
+		})
 	}
 	
 	pub fn address(&self) -> ATAddress {
@@ -99,7 +88,7 @@ impl ATModule {
 	}
 	
 	fn read_reply(&mut self) -> ATReply {
-		self.receiver.recv()
+		self.reply_receiver.recv()
 			.expect("mpsc sender should not disconnect")
 	}
 	

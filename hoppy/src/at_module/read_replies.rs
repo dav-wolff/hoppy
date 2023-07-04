@@ -31,17 +31,15 @@ pub struct ATMessage {
 	pub data: Box<[u8]>,
 }
 
-pub fn read_replies<F>(reader: impl Read, sender: Sender<ATReply>, mut callback: F)
-	where F: FnMut(ATMessage)
-{
+pub fn read_replies(reader: impl Read, reply_sender: Sender<ATReply>, message_sender: Sender<ATMessage>) {
 	let mut buffer = DynReadBuffer::new(reader);
 	
 	loop {
 		let reply_type = buffer.read_bytes(3);
 		
 		let result = match reply_type {
-			Ok(b"AT,") => read_at(&mut buffer, &sender),
-			Ok(b"LR,") => read_lr(&mut buffer, &mut callback),
+			Ok(b"AT,") => read_at(&mut buffer, &reply_sender),
+			Ok(b"LR,") => read_lr(&mut buffer, &message_sender),
 			Ok(_) => Err(ErrorKind::InvalidData.into()),
 			Err(err) => Err(err),
 		};
@@ -69,9 +67,7 @@ fn read_at(buffer: &mut DynReadBuffer<impl Read>, sender: &Sender<ATReply>) -> R
 	Ok(())
 }
 
-fn read_lr<F>(buffer: &mut DynReadBuffer<impl Read>, callback: &mut F) -> Result<(), io::Error>
-	where F: FnMut(ATMessage)
-{
+fn read_lr(buffer: &mut DynReadBuffer<impl Read>, message_sender: &Sender<ATMessage>) -> Result<(), io::Error> {
 	let header = buffer.read_bytes(8)?;
 	
 	if header[4] != b',' || header[7] != b',' {
@@ -86,10 +82,10 @@ fn read_lr<F>(buffer: &mut DynReadBuffer<impl Read>, callback: &mut F) -> Result
 	
 	let data = buffer.read_bytes(length as usize)?;
 	
-	callback(ATMessage {
+	message_sender.send(ATMessage {
 		address,
 		data: data.into(),
-	});
+	}).expect("mpsc receiver should not disconnect");
 	
 	Ok(())
 }

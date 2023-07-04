@@ -40,10 +40,11 @@ fn main() {
 	let address = ATAddress::new(*b"4290")
 		.expect("address literal should be valid");
 	
-	thread::scope(|s| {
-		let module_builder = ATModule::builder(s, port, address, config);
+	thread::scope(|scope| {
+		let at_module_builder = ATModule::open(scope, port, address, config)
+			.expect("failed to open at module");
 		
-		let mut controller = AODVController::start(module_builder)
+		let mut controller = AODVController::start(scope, at_module_builder)
 			.expect("failed to start aodv controller");
 		
 		controller.send(ATAddress::new(*b"1234").unwrap(), b"Test data".to_owned().into())
