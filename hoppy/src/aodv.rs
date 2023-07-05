@@ -1,7 +1,7 @@
 mod packets;
 mod routing_table;
 
-use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard}};
+use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard}, collections::BTreeSet};
 
 use crate::at_module::{ATModule, at_address::ATAddress, ATModuleBuilder};
 
@@ -9,17 +9,20 @@ use packets::*;
 use routing_table::RoutingTable;
 
 pub struct AODVController {
-	at_module: Mutex<ATModule>,
+	seen_requests: Mutex<BTreeSet<(ATAddress, u16)>>, // unfortunate mutex
 	routing_table: RwLock<RoutingTable>,
+	at_module: Mutex<ATModule>,
 }
 
 impl AODVController {
 	pub fn start<'scope>(scope: &'scope thread::Scope<'scope, '_>, at_module_builder: ATModuleBuilder) -> Arc<Self> {
 		let (at_module, at_message_receiver) = at_module_builder.build();
+		let routing_table = RoutingTable::new(at_module.address());
 		
 		let controller = AODVController {
+			seen_requests: Default::default(),
 			at_module: Mutex::new(at_module),
-			routing_table: Default::default(),
+			routing_table: RwLock::new(routing_table),
 		};
 		
 		let controller = Arc::new(controller);
@@ -67,7 +70,7 @@ impl AODVController {
 		let mut at_module = self.at_module_write();
 		
 		// TODO find a route
-		let next_hop = routing_table.get_route(address)
+		let route = routing_table.get_route(address)
 			.expect("could not find a route");
 		
 		let packet = DataPacket {
@@ -77,27 +80,67 @@ impl AODVController {
 			payload: data,
 		};
 		
-		at_module.send(next_hop, &packet.to_bytes())
+		at_module.send(route.next_hop, &packet.to_bytes())
 	}
 	
 	fn handle_packet(&self, packet: AODVPacket) -> Result<(), io::Error> {
 		use AODVPacketBody::*;
 		
+		let sender = packet.sender;
+		
 		match packet.body {
-			RouteRequest(packet) => todo!(),
+			RouteRequest(packet) => self.handle_route_request(sender, packet)?,
 			RouteReply(packet) => todo!(),
 			RouteError(packet) => todo!(),
-			Data(packet) => self.handle_data_packet(packet)?,
+			Data(packet) => self.handle_data(packet)?,
 			DataAcknowledge(packet) => todo!(),
 		}
 		
 		Ok(())
 	}
 	
-	fn handle_data_packet(&self, packet: DataPacket) -> Result<(), io::Error> {
+	fn handle_route_request(&self, sender: ATAddress, packet: RouteRequestPacket) -> Result<(), io::Error> {
+		let mut seen_requests = self.seen_requests.lock()
+			.expect("should only be accessed from this thread");
+		
+		let is_new_request = seen_requests.insert((packet.origin, packet.id));
+		
+		if !is_new_request {
+			return Ok(());
+		}
+		
+		let mut routing_table = self.routing_table_write();
+		let mut at_module = self.at_module_write();
+		
+		routing_table.add_route(packet.origin, packet.origin_sequence, sender, packet.hop_count);
+		
+		if let Some(route) = routing_table.get_route(packet.destination) {
+			let reply = RouteReplyPacket {
+				hop_count: packet.hop_count + route.hop_count,
+				destination: packet.origin,
+				destination_sequence: packet.origin_sequence,
+				origin: packet.destination,
+			};
+			
+			at_module.send(sender, &reply.to_bytes())?;
+			
+			return Ok(());
+		}
+		
+		let packet = RouteRequestPacket {
+			hop_count: packet.hop_count + 1,
+			..packet
+		};
+		
+		at_module.broadcast(&packet.to_bytes())?;
+		
+		Ok(())
+	}
+	
+	fn handle_data(&self, packet: DataPacket) -> Result<(), io::Error> {
 		let routing_table = self.routing_table_read();
 		
-		let Some(next_hop) = routing_table.get_route(packet.destination) else {
+		let Some(route) = routing_table.get_route(packet.destination) else {
 			eprintln!("[WARNING] Received DataPacket for unknown destination:\n{packet:#?}");
 			
 			// DataPackets without a valid route are dropped without a response
@@ -105,7 +148,7 @@ impl AODVController {
 		};
 		
 		let mut at_module = self.at_module_write();
-		at_module.send(next_hop, &packet.to_bytes())?;
+		at_module.send(route.next_hop, &packet.to_bytes())?;
 		
 		Ok(())
 	}

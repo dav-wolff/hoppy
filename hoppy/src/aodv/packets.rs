@@ -108,7 +108,7 @@ impl RouteRequestPacket {
 	}
 	
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		let mut data = Vec::with_capacity(23);
+		let mut data = Vec::with_capacity(24);
 		data.push(b'0');
 		data.push(if self.destination_sequence.is_none() {
 			b'Y'

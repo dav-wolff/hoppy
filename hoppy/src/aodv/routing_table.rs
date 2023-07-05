@@ -2,26 +2,31 @@ use std::collections::BTreeMap;
 
 use crate::at_module::at_address::ATAddress;
 
-struct Entry {
-	destination_sequence: u16,
-	next_hop: ATAddress,
-	hop_count: u8,
-	precursors: Vec<ATAddress>,
+#[derive(Debug, Clone, Copy)]
+pub struct Route {
+	pub destination_sequence: u16,
+	pub next_hop: ATAddress,
+	pub hop_count: u8,
 }
 
 pub struct RoutingTable {
-	entries: BTreeMap<ATAddress, Entry>,
+	entries: BTreeMap<ATAddress, Route>,
 }
 
 impl RoutingTable {
-	pub fn new() -> Self {
-		// TODO remove test data
+	pub fn new(own_address: ATAddress) -> Self {
 		let mut entries = BTreeMap::new();
-		entries.insert(ATAddress::new(*b"1234").unwrap(), Entry {
+		entries.insert(own_address, Route {
+			destination_sequence: 0, // TODO figure out destination sequence
+			next_hop: own_address,
+			hop_count: 0,
+		});
+		
+		// TODO remove test data
+		entries.insert(ATAddress::new(*b"1234").unwrap(), Route {
 			destination_sequence: 0,
 			next_hop: ATAddress::new(*b"ABCD").unwrap(),
 			hop_count: 2,
-			precursors: Vec::new(),
 		});
 		
 		Self {
@@ -29,14 +34,24 @@ impl RoutingTable {
 		}
 	}
 	
-	pub fn get_route(&self, destination: ATAddress) -> Option<ATAddress> {
+	pub fn get_route(&self, destination: ATAddress) -> Option<Route> {
 		self.entries.get(&destination)
-			.map(|entry| entry.next_hop)
+			.copied()
 	}
-}
-
-impl Default for RoutingTable {
-	fn default() -> Self {
-		RoutingTable::new()
+	
+	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) {
+		let new_entry = Route {
+			destination_sequence,
+			next_hop,
+			hop_count,
+		};
+		
+		self.entries.entry(destination)
+			.and_modify(|entry| {
+				if entry.hop_count > new_entry.hop_count {
+					*entry = new_entry;
+				}
+			})
+			.or_insert(new_entry);
 	}
 }
