@@ -1,4 +1,4 @@
-use std::{io::{Read, self, ErrorKind}, sync::mpsc::Sender};
+use std::{io::{Read, self, ErrorKind}, sync::mpsc::Sender, fmt::Display};
 
 use read_buffer::DynReadBuffer;
 
@@ -25,10 +25,19 @@ impl ATReply {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ATMessage {
 	pub address: ATAddress,
 	pub data: Box<[u8]>,
+}
+
+impl Display for ATMessage {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let address = self.address;
+		let data = String::from_utf8_lossy(&self.data);
+		
+		write!(f, "<{address}> {data}")
+	}
 }
 
 pub fn read_replies(reader: impl Read, reply_sender: Sender<ATReply>, message_sender: Sender<ATMessage>) {

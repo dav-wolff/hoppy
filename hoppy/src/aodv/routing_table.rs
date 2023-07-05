@@ -34,3 +34,9 @@ impl RoutingTable {
 			.map(|entry| entry.next_hop)
 	}
 }
+
+impl Default for RoutingTable {
+	fn default() -> Self {
+		RoutingTable::new()
+	}
+}

@@ -3,7 +3,13 @@ use std::io::{self, ErrorKind};
 use crate::{at_module::{ATMessage, at_address::ATAddress}, hex::{parse_ascii_hex, Integer, encode_ascii_hex}};
 
 #[derive(Debug)]
-pub enum AODVPacket {
+pub struct AODVPacket {
+	pub sender: ATAddress,
+	pub body: AODVPacketBody,
+}
+
+#[derive(Debug)]
+pub enum AODVPacketBody {
 	RouteRequest(RouteRequestPacket),
 	RouteReply(RouteReplyPacket),
 	RouteError(RouteErrorPacket),
@@ -11,9 +17,9 @@ pub enum AODVPacket {
 	DataAcknowledge(DataAcknowledgePacket),
 }
 
-impl AODVPacket {
+impl AODVPacketBody {
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		use AODVPacket::*;
+		use AODVPacketBody::*;
 		
 		match self {
 			RouteRequest(packet) => packet.to_bytes(),
@@ -49,13 +55,18 @@ fn take_address<'a>(data: &mut &'a[u8]) -> Result<ATAddress, io::Error> {
 pub fn parse_packet(message: ATMessage) -> Result<AODVPacket, io::Error> {
 	let mut data: &[u8] = &message.data;
 	
-	Ok(match take_bytes(&mut data, 1)?[0] {
-		b'0' => AODVPacket::RouteRequest(RouteRequestPacket::parse_from(data)?),
-		b'1' => AODVPacket::RouteReply(RouteReplyPacket::parse_from(data)?),
-		b'2' => AODVPacket::RouteError(RouteErrorPacket::parse_from(data)?),
-		b'3' => AODVPacket::Data(DataPacket::parse_from(data)?),
-		b'4' => AODVPacket::DataAcknowledge(DataAcknowledgePacket::parse_from(data)?),
+	let body = match take_bytes(&mut data, 1)?[0] {
+		b'0' => AODVPacketBody::RouteRequest(RouteRequestPacket::parse_from(data)?),
+		b'1' => AODVPacketBody::RouteReply(RouteReplyPacket::parse_from(data)?),
+		b'2' => AODVPacketBody::RouteError(RouteErrorPacket::parse_from(data)?),
+		b'3' => AODVPacketBody::Data(DataPacket::parse_from(data)?),
+		b'4' => AODVPacketBody::DataAcknowledge(DataAcknowledgePacket::parse_from(data)?),
 		_ => return Err(ErrorKind::InvalidData.into()),
+	};
+	
+	Ok(AODVPacket {
+		sender: message.address,
+		body,
 	})
 }
 
