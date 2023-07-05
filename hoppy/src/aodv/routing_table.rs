@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Display};
 
 use crate::at_module::at_address::ATAddress;
 
@@ -40,18 +40,34 @@ impl RoutingTable {
 	}
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) {
-		let new_entry = Route {
+		let entry = self.entries.get(&destination);
+		
+		if let Some(route) = entry {
+			if route.hop_count <= hop_count {
+				return;
+			}
+		}
+		
+		self.entries.insert(destination, Route {
 			destination_sequence,
 			next_hop,
 			hop_count,
-		};
+		});
 		
-		self.entries.entry(destination)
-			.and_modify(|entry| {
-				if entry.hop_count > new_entry.hop_count {
-					*entry = new_entry;
-				}
-			})
-			.or_insert(new_entry);
+		println!("[INFO] Routing table updated:\n{self}");
+	}
+}
+
+impl Display for RoutingTable {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		writeln!(f, "+----+----+----+----+")?;
+		writeln!(f, "|DEST|DSEQ|NHOP|HCNT|")?;
+		writeln!(f, "+----+----+----+----+")?;
+		
+		for (destination, Route { destination_sequence, next_hop, hop_count }) in &self.entries {
+			writeln!(f, "|{destination}|{destination_sequence:04X}|{next_hop}|  {hop_count:02X}|")?;
+		}
+		
+		write!(f, "+----+----+----+----+")
 	}
 }
