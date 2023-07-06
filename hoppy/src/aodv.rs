@@ -30,19 +30,16 @@ impl AODVController {
 		
 		scope.spawn(move || {
 			for message in at_message_receiver {
-				// TODO avoid clone
-				let error_message = message.clone();
-				let packet = match parse_packet(message) {
+				let packet = match parse_packet(&message) {
 					Ok(packet) => packet,
 					Err(err) => {
-						eprintln!("[ERROR] Encountered invalid packet ({err}):\n\t{error_message}");
+						eprintln!("[ERROR] Encountered invalid packet ({err}):\n\t{message}");
 						continue;
 					},
 				};
 				
-				if let Err(err) = controller.handle_packet(packet) {
-					// TODO display the packet
-					eprintln!("[Error] Error occured trying to handle a packet ({err})")
+				if let Err(err) = controller.handle_packet(&packet) {
+					eprintln!("[Error] Error occured trying to handle a packet ({err}):\n{packet:#?}");
 				}
 			}
 		});
@@ -83,12 +80,12 @@ impl AODVController {
 		at_module.send(route.next_hop, &packet.to_bytes())
 	}
 	
-	fn handle_packet(&self, packet: AODVPacket) -> Result<(), io::Error> {
+	fn handle_packet(&self, packet: &AODVPacket) -> Result<(), io::Error> {
 		use AODVPacketBody::*;
 		
 		let sender = packet.sender;
 		
-		match packet.body {
+		match &packet.body {
 			RouteRequest(packet) => self.handle_route_request(sender, packet)?,
 			RouteReply(packet) => self.handle_route_reply(sender, packet)?,
 			RouteError(packet) => todo!(),
@@ -99,7 +96,7 @@ impl AODVController {
 		Ok(())
 	}
 	
-	fn handle_route_request(&self, sender: ATAddress, packet: RouteRequestPacket) -> Result<(), io::Error> {
+	fn handle_route_request(&self, sender: ATAddress, packet: &RouteRequestPacket) -> Result<(), io::Error> {
 		let mut seen_requests = self.seen_requests.lock()
 			.expect("should only be accessed from this thread");
 		
@@ -129,7 +126,7 @@ impl AODVController {
 		
 		let packet = RouteRequestPacket {
 			hop_count: packet.hop_count + 1,
-			..packet
+			..*packet
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
@@ -137,7 +134,7 @@ impl AODVController {
 		Ok(())
 	}
 	
-	fn handle_route_reply(&self, sender: ATAddress, packet: RouteReplyPacket) -> Result<(), io::Error> {
+	fn handle_route_reply(&self, sender: ATAddress, packet: &RouteReplyPacket) -> Result<(), io::Error> {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
@@ -157,7 +154,7 @@ impl AODVController {
 		
 		let packet = RouteReplyPacket {
 			hop_count: packet.hop_count + 1,
-			..packet
+			..*packet
 		};
 		
 		at_module.send(route.next_hop, &packet.to_bytes())?;
@@ -165,7 +162,7 @@ impl AODVController {
 		Ok(())
 	}
 	
-	fn handle_data(&self, packet: DataPacket) -> Result<(), io::Error> {
+	fn handle_data(&self, packet: &DataPacket) -> Result<(), io::Error> {
 		let routing_table = self.routing_table_read();
 		
 		let Some(route) = routing_table.get_route(packet.destination) else {

@@ -1,4 +1,5 @@
 use std::io::{self, ErrorKind};
+use std::fmt::Debug;
 
 use crate::{at_module::{ATMessage, at_address::ATAddress}, hex::{parse_ascii_hex, Integer, encode_ascii_hex}};
 
@@ -8,7 +9,6 @@ pub struct AODVPacket {
 	pub body: AODVPacketBody,
 }
 
-#[derive(Debug)]
 pub enum AODVPacketBody {
 	RouteRequest(RouteRequestPacket),
 	RouteReply(RouteReplyPacket),
@@ -27,6 +27,20 @@ impl AODVPacketBody {
 			RouteError(packet) => packet.to_bytes(),
 			Data(packet) => packet.to_bytes(),
 			DataAcknowledge(packet) => packet.to_bytes(),
+		}
+	}
+}
+
+impl Debug for AODVPacketBody {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use AODVPacketBody::*;
+		
+		match self {
+			RouteRequest(packet) => packet.fmt(f),
+			RouteReply(packet) => packet.fmt(f),
+			RouteError(packet) => packet.fmt(f),
+			Data(packet) => packet.fmt(f),
+			DataAcknowledge(packet) => packet.fmt(f),
 		}
 	}
 }
@@ -52,15 +66,17 @@ fn take_address<'a>(data: &mut &'a[u8]) -> Result<ATAddress, io::Error> {
 	ATAddress::new(bytes.try_into().expect("take_bytes(_, 4) should always return 4 bytes"))
 }
 
-pub fn parse_packet(message: ATMessage) -> Result<AODVPacket, io::Error> {
+pub fn parse_packet(message: &ATMessage) -> Result<AODVPacket, io::Error> {
+	use AODVPacketBody::*;
+	
 	let mut data: &[u8] = &message.data;
 	
 	let body = match take_bytes(&mut data, 1)?[0] {
-		b'0' => AODVPacketBody::RouteRequest(RouteRequestPacket::parse_from(data)?),
-		b'1' => AODVPacketBody::RouteReply(RouteReplyPacket::parse_from(data)?),
-		b'2' => AODVPacketBody::RouteError(RouteErrorPacket::parse_from(data)?),
-		b'3' => AODVPacketBody::Data(DataPacket::parse_from(data)?),
-		b'4' => AODVPacketBody::DataAcknowledge(DataAcknowledgePacket::parse_from(data)?),
+		b'0' => RouteRequest(RouteRequestPacket::parse_from(data)?),
+		b'1' => RouteReply(RouteReplyPacket::parse_from(data)?),
+		b'2' => RouteError(RouteErrorPacket::parse_from(data)?),
+		b'3' => Data(DataPacket::parse_from(data)?),
+		b'4' => DataAcknowledge(DataAcknowledgePacket::parse_from(data)?),
 		_ => return Err(ErrorKind::InvalidData.into()),
 	};
 	
