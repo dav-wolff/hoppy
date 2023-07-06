@@ -88,7 +88,7 @@ impl AODVController {
 		match &packet.body {
 			RouteRequest(packet) => self.handle_route_request(sender, packet)?,
 			RouteReply(packet) => self.handle_route_reply(sender, packet)?,
-			RouteError(packet) => todo!(),
+			RouteError(packet) => self.handle_route_error(sender, packet)?,
 			Data(packet) => self.handle_data(packet)?,
 			DataAcknowledge(packet) => todo!(),
 		}
@@ -158,6 +158,23 @@ impl AODVController {
 		};
 		
 		at_module.send(route.next_hop, &packet.to_bytes())?;
+		
+		Ok(())
+	}
+	
+	fn handle_route_error(&self, sender: ATAddress, packet: &RouteErrorPacket) -> Result<(), io::Error> {
+		let mut routing_table = self.routing_table_write();
+		
+		let is_route_removed = routing_table.remove_route(packet.destination, sender);
+		
+		if !is_route_removed {
+			// no changes were made, so no need to notify others
+			return Ok(());
+		}
+		
+		let mut at_module = self.at_module_write();
+		
+		at_module.broadcast(&packet.to_bytes())?;
 		
 		Ok(())
 	}

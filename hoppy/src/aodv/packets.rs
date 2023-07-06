@@ -176,13 +176,11 @@ impl RouteReplyPacket {
 pub struct RouteErrorPacket {
 	pub destination: ATAddress,
 	pub destination_sequence: u16,
-	pub destination_count: u8,
 }
 
 impl RouteErrorPacket {
 	fn parse_from(mut data: &[u8]) -> Result<Self, io::Error> {
 		Ok(Self {
-			destination_count: take_int(&mut data, 2)?,
 			destination: take_address(&mut data)?,
 			destination_sequence: take_int(&mut data, 4)?,
 		})
@@ -191,7 +189,6 @@ impl RouteErrorPacket {
 	pub fn to_bytes(&self) -> Box<[u8]> {
 		let mut data = Vec::with_capacity(11);
 		data.push(b'2');
-		data.extend(encode_ascii_hex(self.destination_count));
 		data.extend_from_slice(self.destination.as_bytes());
 		data.extend(encode_ascii_hex(self.destination_sequence));
 		

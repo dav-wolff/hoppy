@@ -40,9 +40,7 @@ impl RoutingTable {
 	}
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) {
-		let entry = self.entries.get(&destination);
-		
-		if let Some(route) = entry {
+		if let Some(route) = self.entries.get(&destination) {
 			if route.hop_count <= hop_count {
 				return;
 			}
@@ -55,6 +53,17 @@ impl RoutingTable {
 		});
 		
 		println!("[INFO] Routing table updated:\n{self}");
+	}
+	
+	pub fn remove_route(&mut self, destination: ATAddress, next_hop: ATAddress) -> bool {
+		if let Some(route) = self.entries.get(&destination) {
+			if route.next_hop == next_hop {
+				self.entries.remove(&destination);
+				return true;
+			}
+		}
+		
+		false
 	}
 }
 
