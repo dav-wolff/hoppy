@@ -56,12 +56,12 @@ fn take_bytes<'a>(data: &mut &'a[u8], amount: usize) -> Result<&'a[u8], io::Erro
 	Ok(bytes)
 }
 
-fn take_int<'a, I: Integer<I>>(data: &mut &'a[u8], amount: usize) -> Result<I, io::Error> {
+fn take_int<I: Integer<I>>(data: &mut &[u8], amount: usize) -> Result<I, io::Error> {
 	let bytes = take_bytes(data, amount)?;
 	parse_ascii_hex(bytes)
 }
 
-fn take_address<'a>(data: &mut &'a[u8]) -> Result<ATAddress, io::Error> {
+fn take_address(data: &mut &[u8]) -> Result<ATAddress, io::Error> {
 	let bytes = take_bytes(data, 4)?;
 	ATAddress::new(bytes.try_into().expect("take_bytes(_, 4) should always return 4 bytes"))
 }
