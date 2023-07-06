@@ -17,20 +17,6 @@ pub enum AODVPacketBody {
 	DataAcknowledge(DataAcknowledgePacket),
 }
 
-impl AODVPacketBody {
-	pub fn to_bytes(&self) -> Box<[u8]> {
-		use AODVPacketBody::*;
-		
-		match self {
-			RouteRequest(packet) => packet.to_bytes(),
-			RouteReply(packet) => packet.to_bytes(),
-			RouteError(packet) => packet.to_bytes(),
-			Data(packet) => packet.to_bytes(),
-			DataAcknowledge(packet) => packet.to_bytes(),
-		}
-	}
-}
-
 impl Debug for AODVPacketBody {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		use AODVPacketBody::*;
