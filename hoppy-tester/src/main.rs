@@ -61,7 +61,7 @@ fn send(path: &str) {
 		.open()
 		.expect("couldn't open serial port");
 	
-	port.write("Hello world".as_bytes())
+	port.write_all("Hello world".as_bytes())
 		.expect("couldn't write to port");
 }
 
@@ -115,9 +115,9 @@ fn send_requests(mut writer: impl Write, rx: Receiver<String>) {
 			break;
 		}
 		
-		writer.write(line.as_bytes())
+		writer.write_all(line.as_bytes())
 			.expect("couldn't write to port");
-		writer.write(b"\r\n")
+		writer.write_all(b"\r\n")
 			.expect("couldn't write to port");
 		
 		loop {

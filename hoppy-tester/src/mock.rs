@@ -57,7 +57,7 @@ fn bytes_received(mut writer: impl Write, bytes: &[u8]) {
 	// source address hard-coded to '1234' for now
 	write!(writer, "LR,1234,{length:02X},")
 		.expect("couldn't write to port");
-	writer.write(bytes)
+	writer.write_all(bytes)
 		.expect("couldn't write to port");
 }
 
