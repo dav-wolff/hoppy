@@ -13,6 +13,14 @@ fn main() {
 	let mut args = std::env::args();
 	args.next(); // ignore first arg, which should be the executable's name
 	
+	let address = args.next()
+		.expect("no address provided");
+	let address = ATAddress::new(
+		address.as_bytes()
+			.try_into()
+			.expect("address in invalid format")
+	).expect("address in invalid format");
+	
 	let path = args.next()
 		.expect("no path provided");
 	
@@ -36,9 +44,6 @@ fn main() {
 		payload_length: 8,
 		preamble_length: 8,
 	};
-	
-	let address = ATAddress::new(*b"4290")
-		.expect("address literal should be valid");
 	
 	thread::scope(|scope| {
 		let at_module_builder = ATModule::open(scope, port, address, config)
