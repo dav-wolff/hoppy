@@ -90,7 +90,7 @@ impl AODVController {
 		
 		match packet.body {
 			RouteRequest(packet) => self.handle_route_request(sender, packet)?,
-			RouteReply(packet) => todo!(),
+			RouteReply(packet) => self.handle_route_reply(sender, packet)?,
 			RouteError(packet) => todo!(),
 			Data(packet) => self.handle_data(packet)?,
 			DataAcknowledge(packet) => todo!(),
@@ -133,6 +133,34 @@ impl AODVController {
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
+		
+		Ok(())
+	}
+	
+	fn handle_route_reply(&self, sender: ATAddress, packet: RouteReplyPacket) -> Result<(), io::Error> {
+		let mut routing_table = self.routing_table_write();
+		let mut at_module = self.at_module_write();
+		
+		routing_table.add_route(packet.origin, 0, sender, packet.hop_count); // TODO figure out sequence number
+		
+		if packet.destination == at_module.address() {
+			// TODO send DataPacket for requested route
+			return Ok(());
+		}
+		
+		let Some(route) = routing_table.get_route(packet.destination) else {
+			eprintln!("[WARNING] Received RouteReplyPacket for unknown destination:\n{packet:#?}");
+			
+			// RouteReplyPackets without a valid route are dropped without a response
+			return Ok(());
+		};
+		
+		let packet = RouteReplyPacket {
+			hop_count: packet.hop_count + 1,
+			..packet
+		};
+		
+		at_module.send(route.next_hop, &packet.to_bytes())?;
 		
 		Ok(())
 	}
