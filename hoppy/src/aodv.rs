@@ -1,7 +1,7 @@
 mod packets;
 mod routing_table;
 
-use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard, atomic::{AtomicU16, Ordering}}, collections::{BTreeSet, BTreeMap}};
+use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard, atomic::{AtomicU16, Ordering}}, collections::{BTreeSet, BTreeMap}, time::Duration};
 
 use crate::at_module::{ATModule, at_address::ATAddress, ATModuleBuilder};
 
@@ -19,7 +19,7 @@ pub struct AODVController {
 }
 
 impl AODVController {
-	pub fn start<'scope>(scope: &'scope thread::Scope<'scope, '_>, at_module_builder: ATModuleBuilder) -> Arc<Self> {
+	pub fn start<'scope>(scope: &'scope thread::Scope<'scope, '_>, at_module_builder: ATModuleBuilder, hello_interval: Duration) -> Arc<Self> {
 		let (at_module, at_message_receiver) = at_module_builder.build();
 		let routing_table = RoutingTable::new(at_module.address());
 		
@@ -32,7 +32,8 @@ impl AODVController {
 		};
 		
 		let controller = Arc::new(controller);
-		let controller_ret = Arc::clone(&controller);
+		let controller_receive = Arc::clone(&controller);
+		let controller_hello = Arc::clone(&controller);
 		
 		scope.spawn(move || {
 			for message in at_message_receiver {
@@ -44,13 +45,25 @@ impl AODVController {
 					},
 				};
 				
-				if let Err(err) = controller.handle_packet(&packet) {
+				if let Err(err) = controller_receive.handle_packet(&packet) {
 					eprintln!("[Error] Error occured trying to handle a packet ({err}):\n{packet:#?}");
 				}
 			}
 		});
 		
-		controller_ret
+		scope.spawn(move || {
+			loop {
+				let result = controller_hello.send_hello();
+				
+				if let Err(err) = result {
+					eprintln!("[ERROR] Could not send Hello packet ({err})");
+				}
+				
+				thread::sleep(hello_interval);
+			}
+		});
+		
+		controller
 	}
 	
 	fn at_module_write(&self) -> MutexGuard<ATModule> {
@@ -109,6 +122,21 @@ impl AODVController {
 		outbound_messages.entry(address)
 			.or_insert_with(Vec::new)
 			.push(data);
+		
+		Ok(())
+	}
+	
+	fn send_hello(&self) -> Result<(), io::Error> {
+		let mut at_module = self.at_module_write();
+		
+		let packet = RouteReplyPacket {
+			hop_count: 0,
+			destination: at_module.address(),
+			destination_sequence: 0, // TODO figure out sequence number
+			origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
+		};
+		
+		at_module.broadcast(&packet.to_bytes())?;
 		
 		Ok(())
 	}
