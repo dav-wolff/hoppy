@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display, time::Instant};
 
 use crate::at_module::at_address::ATAddress;
 
@@ -7,10 +7,12 @@ pub struct Route {
 	pub destination_sequence: u16,
 	pub next_hop: ATAddress,
 	pub hop_count: u8,
+	pub time_added: Instant,
 }
 
 pub struct RoutingTable {
 	entries: BTreeMap<ATAddress, Route>,
+	own_address: ATAddress,
 }
 
 impl RoutingTable {
@@ -20,11 +22,17 @@ impl RoutingTable {
 			destination_sequence: 0, // TODO figure out destination sequence
 			next_hop: own_address,
 			hop_count: 0,
+			time_added: Instant::now(),
 		});
 		
-		Self {
+		let routing_table = Self {
 			entries,
-		}
+			own_address,
+		};
+		
+		println!("[INFO] Routing table updated:\n{routing_table}");
+		
+		routing_table
 	}
 	
 	pub fn get_route(&self, destination: ATAddress) -> Option<Route> {
@@ -43,6 +51,7 @@ impl RoutingTable {
 			destination_sequence,
 			next_hop,
 			hop_count,
+			time_added: Instant::now(),
 		});
 		
 		println!("[INFO] Routing table updated:\n{self}");
@@ -57,11 +66,19 @@ impl RoutingTable {
 		if let Some(route) = self.entries.get(&destination) {
 			if route.next_hop == next_hop {
 				self.entries.remove(&destination);
+				println!("[INFO] Routing table updated:\n{self}");
 				return true;
 			}
 		}
 		
 		false
+	}
+	
+	pub fn neighbors(&self) -> impl Iterator<Item = Route> + '_ {
+		self.entries.iter()
+			.filter(|(destination, route)| route.next_hop == **destination && **destination != self.own_address)
+			.map(|(_, route)| route)
+			.copied()
 	}
 }
 
@@ -71,7 +88,7 @@ impl Display for RoutingTable {
 		writeln!(f, "|DEST|DSEQ|NHOP|HCNT|")?;
 		writeln!(f, "+----+----+----+----+")?;
 		
-		for (destination, Route { destination_sequence, next_hop, hop_count }) in &self.entries {
+		for (destination, Route { destination_sequence, next_hop, hop_count, .. }) in &self.entries {
 			writeln!(f, "|{destination}|{destination_sequence:04X}|{next_hop}|  {hop_count:02X}|")?;
 		}
 		

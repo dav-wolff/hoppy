@@ -1,7 +1,7 @@
 mod packets;
 mod routing_table;
 
-use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard, atomic::{AtomicU16, Ordering}}, collections::{BTreeSet, BTreeMap}, time::Duration};
+use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard, atomic::{AtomicU16, Ordering}}, collections::{BTreeSet, BTreeMap}, time::{Duration, Instant}};
 
 use crate::at_module::{ATModule, at_address::ATAddress, ATModuleBuilder};
 
@@ -16,10 +16,16 @@ pub struct AODVController {
 	at_module: Mutex<ATModule>,
 	outbound_messages: Mutex<BTreeMap<ATAddress, Vec<Box<[u8]>>>>,
 	current_route_request_id: AtomicU16,
+	hello_timeout: Duration,
 }
 
 impl AODVController {
-	pub fn start<'scope>(scope: &'scope thread::Scope<'scope, '_>, at_module_builder: ATModuleBuilder, hello_interval: Duration) -> Arc<Self> {
+	pub fn start<'scope>(
+		scope: &'scope thread::Scope<'scope, '_>,
+		at_module_builder: ATModuleBuilder,
+		hello_interval: Duration,
+		hello_timeout: Duration
+	) -> Arc<Self> {
 		let (at_module, at_message_receiver) = at_module_builder.build();
 		let routing_table = RoutingTable::new(at_module.address());
 		
@@ -29,6 +35,7 @@ impl AODVController {
 			routing_table: RwLock::new(routing_table),
 			outbound_messages: Default::default(),
 			current_route_request_id: 0.into(),
+			hello_timeout,
 		};
 		
 		let controller = Arc::new(controller);
@@ -57,6 +64,12 @@ impl AODVController {
 				
 				if let Err(err) = result {
 					eprintln!("[ERROR] Could not send Hello packet ({err})");
+				}
+				
+				let result = controller_hello.check_neighbor_hello();
+				
+				if let Err(err) = result {
+					eprintln!("[ERROR] Could not send RouteErrorPacket ({err})")
 				}
 				
 				thread::sleep(hello_interval);
@@ -130,13 +143,50 @@ impl AODVController {
 		let mut at_module = self.at_module_write();
 		
 		let packet = RouteReplyPacket {
-			hop_count: 0,
+			hop_count: 1, // TODO should be 0 according to specification but 1 according to current implementation of handle_route_request
 			destination: at_module.address(),
 			destination_sequence: 0, // TODO figure out sequence number
 			origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
+		
+		Ok(())
+	}
+	
+	fn check_neighbor_hello(&self) -> Result<(), io::Error> {
+		let routing_table = self.routing_table_read();
+		
+		let current_time = Instant::now();
+		let mut timed_out_neighbors = Vec::new();
+		
+		for neighbor in routing_table.neighbors() {
+			if current_time - neighbor.time_added > self.hello_timeout {
+				timed_out_neighbors.push(neighbor);
+			}
+		}
+		
+		// avoid taking write locks if no neighbor timed out
+		if timed_out_neighbors.is_empty() {
+			return Ok(());
+		}
+		
+		// release read lock
+		std::mem::drop(routing_table);
+		
+		let mut routing_table = self.routing_table_write();
+		let mut at_module = self.at_module_write();
+		
+		for neighbor in timed_out_neighbors {
+			routing_table.remove_route(neighbor.next_hop, neighbor.next_hop);
+			
+			let packet = RouteErrorPacket {
+				destination: neighbor.next_hop,
+				destination_sequence: neighbor.destination_sequence,
+			};
+			
+			at_module.broadcast(&packet.to_bytes())?;
+		}
 		
 		Ok(())
 	}

@@ -8,7 +8,8 @@ mod at_module;
 mod aodv;
 
 const BAUD_RATE: u32 = 9600;
-const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
+const HELLO_INTERVAL: Duration = Duration::from_secs(10);
+const HELLO_TIMEOUT: Duration = Duration::from_secs(25);
 
 fn main() {
 	let mut args = std::env::args();
@@ -50,7 +51,7 @@ fn main() {
 		let at_module_builder = ATModule::open(scope, port, address, config)
 			.expect("failed to open at module");
 		
-		let controller = AODVController::start(scope, at_module_builder, HELLO_TIMEOUT);
+		let controller = AODVController::start(scope, at_module_builder, HELLO_INTERVAL, HELLO_TIMEOUT);
 		
 		controller.send(ATAddress::new(*b"1234").unwrap(), b"Test data".to_owned().into())
 			.expect("could not send test message");
