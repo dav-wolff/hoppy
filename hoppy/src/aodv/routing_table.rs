@@ -22,13 +22,6 @@ impl RoutingTable {
 			hop_count: 0,
 		});
 		
-		// TODO remove test data
-		entries.insert(ATAddress::new(*b"1234").unwrap(), Route {
-			destination_sequence: 0,
-			next_hop: ATAddress::new(*b"ABCD").unwrap(),
-			hop_count: 2,
-		});
-		
 		Self {
 			entries,
 		}
@@ -39,10 +32,10 @@ impl RoutingTable {
 			.copied()
 	}
 	
-	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) {
+	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) -> Option<Route> {
 		if let Some(route) = self.entries.get(&destination) {
 			if route.hop_count <= hop_count {
-				return;
+				return None;
 			}
 		}
 		
@@ -53,6 +46,11 @@ impl RoutingTable {
 		});
 		
 		println!("[INFO] Routing table updated:\n{self}");
+		
+		let route = self.entries.get(&destination)
+			.expect("route was just inserted");
+		
+		Some(*route)
 	}
 	
 	pub fn remove_route(&mut self, destination: ATAddress, next_hop: ATAddress) -> bool {

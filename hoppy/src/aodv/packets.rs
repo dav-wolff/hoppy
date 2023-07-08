@@ -74,8 +74,8 @@ pub fn parse_packet(message: &ATMessage) -> Result<AODVPacket, io::Error> {
 
 #[derive(Debug)]
 pub struct RouteRequestPacket {
-	pub id: u16,
 	pub hop_count: u8,
+	pub id: u16,
 	pub destination: ATAddress,
 	pub destination_sequence: Option<u16>,
 	pub origin: ATAddress,

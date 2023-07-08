@@ -1,17 +1,21 @@
 mod packets;
 mod routing_table;
 
-use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard}, collections::BTreeSet};
+use std::{io, thread, sync::{Mutex, Arc, RwLock, MutexGuard, RwLockWriteGuard, RwLockReadGuard, atomic::{AtomicU16, Ordering}}, collections::{BTreeSet, BTreeMap}};
 
 use crate::at_module::{ATModule, at_address::ATAddress, ATModuleBuilder};
 
 use packets::*;
 use routing_table::RoutingTable;
 
+use self::routing_table::Route;
+
 pub struct AODVController {
 	seen_requests: Mutex<BTreeSet<(ATAddress, u16)>>, // unfortunate mutex
 	routing_table: RwLock<RoutingTable>,
 	at_module: Mutex<ATModule>,
+	outbound_messages: Mutex<BTreeMap<ATAddress, Vec<Box<[u8]>>>>,
+	current_route_request_id: AtomicU16,
 }
 
 impl AODVController {
@@ -23,6 +27,8 @@ impl AODVController {
 			seen_requests: Default::default(),
 			at_module: Mutex::new(at_module),
 			routing_table: RwLock::new(routing_table),
+			outbound_messages: Default::default(),
+			current_route_request_id: 0.into(),
 		};
 		
 		let controller = Arc::new(controller);
@@ -62,22 +68,70 @@ impl AODVController {
 			.expect("no threads should panic")
 	}
 	
+	fn outbound_messages_write(&self) -> MutexGuard<BTreeMap<ATAddress, Vec<Box<[u8]>>>> {
+		self.outbound_messages.lock()
+			.expect("no threads should panic")
+	}
+	
 	pub fn send(&self, address: ATAddress, data: Box<[u8]>) -> Result<(), io::Error> {
 		let routing_table = self.routing_table_read();
 		let mut at_module = self.at_module_write();
 		
-		// TODO find a route
-		let route = routing_table.get_route(address)
-			.expect("could not find a route");
+		if let Some(route) = routing_table.get_route(address) {
+			let packet = DataPacket {
+				destination: address,
+				origin: at_module.address(),
+				sequence: 0, // TODO figure out sequence number
+				payload: data,
+			};
+			
+			at_module.send(route.next_hop, &packet.to_bytes())?;
+			
+			return Ok(());
+		}
 		
-		let packet = DataPacket {
+		let id = self.current_route_request_id.fetch_add(1, Ordering::Relaxed);
+		
+		let packet = RouteRequestPacket {
+			id,
+			hop_count: 1,
 			destination: address,
+			destination_sequence: None, // TODO figure out sequence number
 			origin: at_module.address(),
-			sequence: 0, // TODO figure out sequence number
-			payload: data,
+			origin_sequence: 0, // TODO figure out sequence
 		};
 		
-		at_module.send(route.next_hop, &packet.to_bytes())
+		at_module.broadcast(&packet.to_bytes())?;
+		
+		let mut outbound_messages = self.outbound_messages.lock()
+			.expect("no threads should panic");
+		
+		outbound_messages.entry(address)
+			.or_insert_with(Vec::new)
+			.push(data);
+		
+		Ok(())
+	}
+	
+	fn send_outbound_messages(&self, at_module: &mut ATModule, destination: ATAddress, route: Route) -> Result<(), io::Error> {
+		let mut outbound_messages = self.outbound_messages_write();
+		
+		let Some(messages) = outbound_messages.get_mut(&destination) else {
+			return Ok(());
+		};
+		
+		for message in messages.drain(..) {
+			let packet = DataPacket {
+				destination,
+				origin: at_module.address(),
+				sequence: 0, // TODO figure out sequence number
+				payload: message,
+			};
+			
+			at_module.send(route.next_hop, &packet.to_bytes())?;
+		}
+		
+		Ok(())
 	}
 	
 	fn handle_packet(&self, packet: &AODVPacket) -> Result<(), io::Error> {
@@ -109,7 +163,10 @@ impl AODVController {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		routing_table.add_route(packet.origin, packet.origin_sequence, sender, packet.hop_count);
+		if let Some(new_route) = routing_table.add_route(packet.origin, packet.origin_sequence, sender, packet.hop_count) {
+			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
+		}
+		
 		
 		if let Some(route) = routing_table.get_route(packet.destination) {
 			let reply = RouteReplyPacket {
@@ -138,7 +195,9 @@ impl AODVController {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		routing_table.add_route(packet.origin, 0, sender, packet.hop_count); // TODO figure out sequence number
+		if let Some(new_route) = routing_table.add_route(packet.origin, 0, sender, packet.hop_count) { // TODO figure out sequence number
+			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
+		}
 		
 		if packet.destination == at_module.address() {
 			// TODO send DataPacket for requested route
