@@ -161,7 +161,7 @@ impl AODVController {
 		let mut timed_out_neighbors = Vec::new();
 		
 		for neighbor in routing_table.neighbors() {
-			if current_time - neighbor.time_added > self.hello_timeout {
+			if current_time - neighbor.last_seen > self.hello_timeout {
 				timed_out_neighbors.push(neighbor);
 			}
 		}
@@ -277,8 +277,13 @@ impl AODVController {
 			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
 		}
 		
+		// 'Hello' RouteReplyPackets should not be forwarded
+		if packet.origin == packet.destination {
+			return Ok(());
+		}
+		
+		// RouteReplyPackets for self don't need to be forwarded
 		if packet.destination == at_module.address() {
-			// TODO send DataPacket for requested route
 			return Ok(());
 		}
 		

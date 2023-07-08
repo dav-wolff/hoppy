@@ -7,7 +7,7 @@ pub struct Route {
 	pub destination_sequence: u16,
 	pub next_hop: ATAddress,
 	pub hop_count: u8,
-	pub time_added: Instant,
+	pub last_seen: Instant,
 }
 
 pub struct RoutingTable {
@@ -22,7 +22,7 @@ impl RoutingTable {
 			destination_sequence: 0, // TODO figure out destination sequence
 			next_hop: own_address,
 			hop_count: 0,
-			time_added: Instant::now(),
+			last_seen: Instant::now(),
 		});
 		
 		let routing_table = Self {
@@ -42,17 +42,27 @@ impl RoutingTable {
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) -> Option<Route> {
 		if let Some(route) = self.entries.get(&destination) {
-			if route.hop_count <= hop_count {
+			if route.hop_count < hop_count {
 				return None;
 			}
 		}
 		
-		self.entries.insert(destination, Route {
+		let old_route = self.entries.insert(destination, Route {
 			destination_sequence,
 			next_hop,
 			hop_count,
-			time_added: Instant::now(),
+			last_seen: Instant::now(),
 		});
+		
+		if let Some(old_route) = old_route {
+			if old_route.destination_sequence == destination_sequence &&
+				old_route.next_hop == next_hop &&
+				old_route.hop_count == hop_count
+			{
+				// route was not updated, only last_seen
+				return None;
+			}
+		}
 		
 		println!("[INFO] Routing table updated:\n{self}");
 		
