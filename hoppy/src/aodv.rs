@@ -150,9 +150,9 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		
 		let packet = RouteReplyPacket {
 			hop_count: 0,
-			destination: at_module.address(),
-			destination_sequence: 0, // TODO figure out sequence number
-			origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
+			request_destination: at_module.address(),
+			request_destination_sequence: 0, // TODO figure out sequence number
+			request_origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
@@ -255,9 +255,9 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		if let Some(route) = routing_table.get_route(packet.destination) {
 			let reply = RouteReplyPacket {
 				hop_count: packet.hop_count + route.hop_count,
-				destination: packet.origin,
-				destination_sequence: packet.origin_sequence,
-				origin: packet.destination,
+				request_destination: packet.destination,
+				request_destination_sequence: 0, // TODO figure out sequence number
+				request_origin: packet.origin,
 			};
 			
 			at_module.send(sender, &reply.to_bytes())?;
@@ -279,22 +279,22 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		if let Some(new_route) = routing_table.add_route(packet.origin, 0, sender, packet.hop_count + 1) { // TODO figure out sequence number
-			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
+		if let Some(new_route) = routing_table.add_route(packet.request_destination, 0, sender, packet.hop_count + 1) { // TODO figure out sequence number
+			self.send_outbound_messages(&mut at_module, packet.request_destination, new_route)?;
 		}
 		
 		// 'Hello' RouteReplyPackets should not be forwarded
-		if packet.origin == packet.destination {
+		if packet.request_origin == packet.request_destination { // TODO origin should be broadcast (None?)
 			return Ok(());
 		}
 		
 		// RouteReplyPackets for self don't need to be forwarded
-		if packet.destination == at_module.address() {
+		if packet.request_origin == at_module.address() {
 			return Ok(());
 		}
 		
-		let Some(route) = routing_table.get_route(packet.destination) else {
-			eprintln!("[WARNING] Received RouteReplyPacket for unknown destination:\n{packet:#?}");
+		let Some(route) = routing_table.get_route(packet.request_origin) else {
+			eprintln!("[WARNING] Received RouteReplyPacket for unknown request origin:\n{packet:#?}");
 			
 			// RouteReplyPackets without a valid route are dropped without a response
 			return Ok(());

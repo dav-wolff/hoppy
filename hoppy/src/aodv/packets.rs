@@ -131,18 +131,18 @@ impl RouteRequestPacket {
 #[derive(Debug)]
 pub struct RouteReplyPacket {
 	pub hop_count: u8,
-	pub destination: ATAddress,
-	pub destination_sequence: u16,
-	pub origin: ATAddress,
+	pub request_destination: ATAddress,
+	pub request_destination_sequence: u16,
+	pub request_origin: ATAddress,
 }
 
 impl RouteReplyPacket {
 	fn parse_from(mut data: &[u8]) -> Result<Self, io::Error> {
 		Ok(Self {
 			hop_count: take_int(&mut data, 2)?,
-			destination: take_address(&mut data)?,
-			destination_sequence: take_int(&mut data, 4)?,
-			origin: take_address(&mut data)?,
+			request_destination: take_address(&mut data)?,
+			request_destination_sequence: take_int(&mut data, 4)?,
+			request_origin: take_address(&mut data)?,
 		})
 	}
 	
@@ -150,9 +150,9 @@ impl RouteReplyPacket {
 		let mut data = Vec::with_capacity(15);
 		data.push(b'1');
 		data.extend(encode_ascii_hex(self.hop_count));
-		data.extend_from_slice(self.destination.as_bytes());
-		data.extend(encode_ascii_hex(self.destination_sequence));
-		data.extend_from_slice(self.origin.as_bytes());
+		data.extend_from_slice(self.request_destination.as_bytes());
+		data.extend(encode_ascii_hex(self.request_destination_sequence));
+		data.extend_from_slice(self.request_origin.as_bytes());
 		
 		data.into()
 	}
