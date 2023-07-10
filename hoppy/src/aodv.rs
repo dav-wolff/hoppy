@@ -112,7 +112,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		if let Some(route) = routing_table.get_route(address) {
 			let packet = DataPacket {
 				destination: address,
-				origin: at_module.address(),
+				origin: self.address,
 				sequence: 0, // TODO figure out sequence number
 				payload: data,
 			};
@@ -129,7 +129,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			hop_count: 0,
 			destination: address,
 			destination_sequence: None, // TODO figure out sequence number
-			origin: at_module.address(),
+			origin: self.address,
 			origin_sequence: 0, // TODO figure out sequence
 		};
 		
@@ -150,7 +150,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		
 		let packet = RouteReplyPacket {
 			hop_count: 0,
-			request_destination: at_module.address(),
+			request_destination: self.address,
 			request_destination_sequence: 0, // TODO figure out sequence number
 			request_origin: None,
 		};
@@ -207,7 +207,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		for message in messages.drain(..) {
 			let packet = DataPacket {
 				destination,
-				origin: at_module.address(),
+				origin: self.address,
 				sequence: 0, // TODO figure out sequence number
 				payload: message,
 			};
@@ -289,7 +289,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		};
 		
 		// RouteReplyPackets for self don't need to be forwarded
-		if request_origin == at_module.address() {
+		if request_origin == self.address {
 			return Ok(());
 		}
 		
