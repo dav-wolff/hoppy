@@ -120,7 +120,7 @@ impl AODVController {
 		
 		let packet = RouteRequestPacket {
 			id,
-			hop_count: 1,
+			hop_count: 0,
 			destination: address,
 			destination_sequence: None, // TODO figure out sequence number
 			origin: at_module.address(),
@@ -143,7 +143,7 @@ impl AODVController {
 		let mut at_module = self.at_module_write();
 		
 		let packet = RouteReplyPacket {
-			hop_count: 1, // TODO should be 0 according to specification but 1 according to current implementation of handle_route_request
+			hop_count: 0,
 			destination: at_module.address(),
 			destination_sequence: 0, // TODO figure out sequence number
 			origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
@@ -241,7 +241,7 @@ impl AODVController {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		if let Some(new_route) = routing_table.add_route(packet.origin, packet.origin_sequence, sender, packet.hop_count) {
+		if let Some(new_route) = routing_table.add_route(packet.origin, packet.origin_sequence, sender, packet.hop_count + 1) {
 			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
 		}
 		
@@ -273,7 +273,7 @@ impl AODVController {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		if let Some(new_route) = routing_table.add_route(packet.origin, 0, sender, packet.hop_count) { // TODO figure out sequence number
+		if let Some(new_route) = routing_table.add_route(packet.origin, 0, sender, packet.hop_count + 1) { // TODO figure out sequence number
 			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
 		}
 		
