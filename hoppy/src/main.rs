@@ -1,4 +1,4 @@
-use std::{time::Duration, thread};
+use std::{time::Duration, thread, io};
 use aodv::AODVController;
 use at_module::{ATModule, at_address::ATAddress, ATConfig, HeaderMode, ReceiveMode};
 
@@ -56,7 +56,16 @@ fn main() {
 			println!("[DATA] {address}: {text}");
 		});
 		
-		controller.send(ATAddress::new(*b"1234").unwrap(), b"Test data".to_owned().into())
-			.expect("could not send test message");
+		for line in io::stdin().lines() {
+			let line = line
+				.expect("couldn't read from stdin");
+			let line = line.as_bytes();
+			
+			let address = ATAddress::new(line[..4].try_into().unwrap())
+				.expect("address in invalid format");
+			
+			controller.send(address, line[4..].into())
+				.expect("could not send data");
+		}
 	});
 }
