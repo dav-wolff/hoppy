@@ -23,6 +23,7 @@ fn parse_ascii_hex_digit(ascii_digit: u8) -> Result<u8, io::Error> {
 	let digit = match ascii_digit {
 		b'0'..=b'9' => ascii_digit - b'0',
 		b'A'..=b'F' => ascii_digit - b'A' + 0xA,
+		b'a'..=b'f' => ascii_digit - b'a' + 0xA,
 		_ => return Err(ErrorKind::InvalidData.into()),
 	};
 	
