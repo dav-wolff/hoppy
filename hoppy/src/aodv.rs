@@ -152,7 +152,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			hop_count: 0,
 			request_destination: at_module.address(),
 			request_destination_sequence: 0, // TODO figure out sequence number
-			request_origin: at_module.address(), // TODO should be broadcast according to specification (maybe None?)
+			request_origin: None,
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
@@ -257,7 +257,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 				hop_count: packet.hop_count + route.hop_count,
 				request_destination: packet.destination,
 				request_destination_sequence: 0, // TODO figure out sequence number
-				request_origin: packet.origin,
+				request_origin: Some(packet.origin),
 			};
 			
 			at_module.send(sender, &reply.to_bytes())?;
@@ -284,16 +284,16 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		}
 		
 		// 'Hello' RouteReplyPackets should not be forwarded
-		if packet.request_origin == packet.request_destination { // TODO origin should be broadcast (None?)
+		let Some(request_origin) = packet.request_origin else {
 			return Ok(());
-		}
+		};
 		
 		// RouteReplyPackets for self don't need to be forwarded
-		if packet.request_origin == at_module.address() {
+		if request_origin == at_module.address() {
 			return Ok(());
 		}
 		
-		let Some(route) = routing_table.get_route(packet.request_origin) else {
+		let Some(route) = routing_table.get_route(request_origin) else {
 			eprintln!("[WARNING] Received RouteReplyPacket for unknown request origin:\n{packet:#?}");
 			
 			// RouteReplyPackets without a valid route are dropped without a response

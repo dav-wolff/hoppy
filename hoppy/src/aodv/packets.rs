@@ -133,7 +133,7 @@ pub struct RouteReplyPacket {
 	pub hop_count: u8,
 	pub request_destination: ATAddress,
 	pub request_destination_sequence: u16,
-	pub request_origin: ATAddress,
+	pub request_origin: Option<ATAddress>,
 }
 
 impl RouteReplyPacket {
@@ -142,7 +142,15 @@ impl RouteReplyPacket {
 			hop_count: take_int(&mut data, 2)?,
 			request_destination: take_address(&mut data)?,
 			request_destination_sequence: take_int(&mut data, 4)?,
-			request_origin: take_address(&mut data)?,
+			request_origin: {
+				let bytes = take_bytes(&mut data, 4)?;
+				
+				if bytes == b"FFFF" { // broadcast is used for hello packages which have no request_origin
+					None
+				} else {
+					Some(ATAddress::new(bytes.try_into().expect("take_bytes(_, 4) should always return 4 bytes"))?)
+				}
+			},
 		})
 	}
 	
@@ -152,7 +160,12 @@ impl RouteReplyPacket {
 		data.extend(encode_ascii_hex(self.hop_count));
 		data.extend_from_slice(self.request_destination.as_bytes());
 		data.extend(encode_ascii_hex(self.request_destination_sequence));
-		data.extend_from_slice(self.request_origin.as_bytes());
+		data.extend_from_slice(
+			self.request_origin
+				.as_ref()
+				.map(|address| address.as_bytes())
+				.unwrap_or(b"FFFF") // broadcast is used for hello packages which have no request_origin
+		);
 		
 		data.into()
 	}
