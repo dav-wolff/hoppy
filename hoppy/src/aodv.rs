@@ -10,32 +10,38 @@ use routing_table::RoutingTable;
 
 use self::routing_table::Route;
 
-pub struct AODVController {
+pub struct AODVController<C: Fn(ATAddress, &[u8]) + Send + Sync> {
 	seen_requests: Mutex<BTreeSet<(ATAddress, u16)>>, // unfortunate mutex
 	routing_table: RwLock<RoutingTable>,
 	at_module: Mutex<ATModule>,
 	outbound_messages: Mutex<BTreeMap<ATAddress, Vec<Box<[u8]>>>>,
+	address: ATAddress,
 	current_route_request_id: AtomicU16,
 	hello_timeout: Duration,
+	data_callback: C,
 }
 
-impl AODVController {
-	pub fn start<'scope>(
+impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
+	pub fn start(
 		scope: &'scope thread::Scope<'scope, '_>,
 		at_module_builder: ATModuleBuilder,
 		hello_interval: Duration,
-		hello_timeout: Duration
+		hello_timeout: Duration,
+		data_callback: C
 	) -> Arc<Self> {
 		let (at_module, at_message_receiver) = at_module_builder.build();
-		let routing_table = RoutingTable::new(at_module.address());
+		let address = at_module.address();
+		let routing_table = RoutingTable::new(address);
 		
 		let controller = AODVController {
 			seen_requests: Default::default(),
 			at_module: Mutex::new(at_module),
 			routing_table: RwLock::new(routing_table),
 			outbound_messages: Default::default(),
+			address,
 			current_route_request_id: 0.into(),
 			hello_timeout,
+			data_callback,
 		};
 		
 		let controller = Arc::new(controller);
@@ -322,6 +328,13 @@ impl AODVController {
 	}
 	
 	fn handle_data(&self, packet: &DataPacket) -> Result<(), io::Error> {
+		if packet.destination == self.address {
+			let data_callback = &self.data_callback;
+			data_callback(packet.origin, &packet.payload);
+			
+			return Ok(());
+		}
+		
 		let routing_table = self.routing_table_read();
 		
 		let Some(route) = routing_table.get_route(packet.destination) else {
