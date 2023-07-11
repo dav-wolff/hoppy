@@ -49,7 +49,7 @@ pub fn read_replies(reader: impl Read, reply_sender: Sender<ATReply>, message_se
 		let result = match reply_type {
 			Ok(b"AT,") => read_at(&mut buffer, &reply_sender),
 			Ok(b"LR,") => read_lr(&mut buffer, &message_sender),
-			Ok(_) => Err(ErrorKind::InvalidData.into()),
+			Ok(data) => Err(io::Error::new(ErrorKind::InvalidData, String::from_utf8_lossy(data))),
 			Err(err) => Err(err),
 		};
 		
@@ -89,7 +89,14 @@ fn read_lr(buffer: &mut DynReadBuffer<impl Read>, message_sender: &Sender<ATMess
 	let length = &header[5..=6];
 	let length: u8 = parse_ascii_hex(length)?;
 	
-	let data = buffer.read_bytes(length as usize)?;
+	let data = buffer.read_bytes(length as usize + 2)?;
+	
+	if data[data.len() - 2..] != *b"\r\n" {
+		return Err(io::Error::new(ErrorKind::InvalidData, "Did not receive \\r\\n from LR command"));
+	}
+	
+	// remove '\r\n'
+	let data = &data[..data.len() - 2];
 	
 	message_sender.send(ATMessage {
 		address,
