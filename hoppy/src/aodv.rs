@@ -50,6 +50,8 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		
 		scope.spawn(move || {
 			for message in at_message_receiver {
+				println!("[INFO] Received message:\n\t{message}");
+				
 				let packet = match parse_packet(&message) {
 					Ok(packet) => packet,
 					Err(err) => {
