@@ -59,6 +59,8 @@ fn bytes_received(mut writer: impl Write, bytes: &[u8]) {
 		.expect("couldn't write to port");
 	writer.write_all(bytes)
 		.expect("couldn't write to port");
+	write!(writer, "\r\n")
+		.expect("couldn't write to port");
 }
 
 fn mock_send(mut port: Box<dyn SerialPort>) {
