@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fmt::Display, time::Instant};
 
 use crate::at_module::at_address::ATAddress;
 
+#[derive(Debug, Clone, Copy)]
 enum Entry {
 	Route(Route),
 	UnreachableDestination {
@@ -117,13 +118,21 @@ impl RoutingTable {
 	
 	pub fn neighbors(&self) -> impl Iterator<Item = Route> + '_ {
 		self.entries.iter()
-			.filter_map(|(destination, entry)| match entry {
+			.filter_map(|(&destination, &entry)| match entry {
 				Entry::Route(route) => Some((destination, route)),
 				_ => None,
 			})
-			.filter(|(destination, route)| route.next_hop == **destination && **destination != self.own_address)
+			.filter(|(destination, route)| route.next_hop == *destination && *destination != self.own_address)
 			.map(|(_, route)| route)
-			.copied()
+	}
+	
+	pub fn routes_with_next_hop(&self, next_hop: ATAddress) -> impl Iterator<Item = (ATAddress, Route)> + '_ {
+		self.entries.iter()
+			.filter_map(|(&destination, &entry)| match entry {
+				Entry::Route(route) => Some((destination, route)),
+				_ => None,
+			})
+			.filter(move |(_, route)| route.next_hop == next_hop)
 	}
 }
 

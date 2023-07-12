@@ -166,6 +166,12 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let routing_table = self.routing_table_read();
 		
 		let current_time = Instant::now();
+		
+		let timed_out_routes: Vec<_> = routing_table.neighbors()
+			.filter(|neighbor| current_time - neighbor.last_seen > self.hello_timeout)
+			.flat_map(|neighbor| routing_table.routes_with_next_hop(neighbor.next_hop))
+			.collect();
+		
 		let mut timed_out_neighbors = Vec::new();
 		
 		for neighbor in routing_table.neighbors() {
@@ -185,12 +191,12 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		for neighbor in timed_out_neighbors {
-			routing_table.remove_route(neighbor.next_hop, neighbor.next_hop);
+		for (destination, route) in timed_out_routes {
+			routing_table.remove_route(destination, route.next_hop);
 			
 			let packet = RouteErrorPacket {
-				destination: neighbor.next_hop,
-				destination_sequence: neighbor.destination_sequence,
+				destination,
+				destination_sequence: route.destination_sequence,
 			};
 			
 			at_module.broadcast(&packet.to_bytes())?;
