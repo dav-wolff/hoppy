@@ -2,6 +2,13 @@ use std::{collections::BTreeMap, fmt::Display, time::Instant};
 
 use crate::at_module::at_address::ATAddress;
 
+enum Entry {
+	Route(Route),
+	UnreachableDestination {
+		destination_sequence: u16,
+	}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Route {
 	pub destination_sequence: u16,
@@ -11,19 +18,19 @@ pub struct Route {
 }
 
 pub struct RoutingTable {
-	entries: BTreeMap<ATAddress, Route>,
+	entries: BTreeMap<ATAddress, Entry>,
 	own_address: ATAddress,
 }
 
 impl RoutingTable {
 	pub fn new(own_address: ATAddress) -> Self {
 		let mut entries = BTreeMap::new();
-		entries.insert(own_address, Route {
-			destination_sequence: 0, // TODO figure out destination sequence
+		entries.insert(own_address, Entry::Route(Route {
+			destination_sequence: 0,
 			next_hop: own_address,
 			hop_count: 0,
 			last_seen: Instant::now(),
-		});
+		}));
 		
 		let routing_table = Self {
 			entries,
@@ -37,24 +44,40 @@ impl RoutingTable {
 	
 	pub fn get_route(&self, destination: ATAddress) -> Option<Route> {
 		self.entries.get(&destination)
+			.map(|entry| match entry {
+				Entry::Route(route) => Some(route),
+				_ => None,
+			})
+			.flatten()
+			.copied()
+	}
+	
+	pub fn get_last_known_sequence(&self, destination: ATAddress) -> Option<u16> {
+		self.entries.get(&destination)
+			.map(|entry| match entry {
+				Entry::Route(Route { destination_sequence, .. }) => destination_sequence,
+				Entry::UnreachableDestination { destination_sequence } => destination_sequence,
+			})
 			.copied()
 	}
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) -> Option<Route> {
-		if let Some(route) = self.entries.get(&destination) {
-			if route.hop_count < hop_count {
+		if let Some(Entry::Route(route)) = self.entries.get(&destination) {
+			if route.destination_sequence >= destination_sequence {
 				return None;
 			}
 		}
 		
-		let old_route = self.entries.insert(destination, Route {
+		let new_route = Route {
 			destination_sequence,
 			next_hop,
 			hop_count,
 			last_seen: Instant::now(),
-		});
+		};
 		
-		if let Some(old_route) = old_route {
+		let old_route = self.entries.insert(destination, Entry::Route(new_route));
+		
+		if let Some(Entry::Route(old_route)) = old_route {
 			if old_route.destination_sequence == destination_sequence &&
 				old_route.next_hop == next_hop &&
 				old_route.hop_count == hop_count
@@ -66,26 +89,38 @@ impl RoutingTable {
 		
 		println!("[INFO] Routing table updated:\n{self}");
 		
-		let route = self.entries.get(&destination)
-			.expect("route was just inserted");
-		
-		Some(*route)
+		Some(new_route)
 	}
 	
 	pub fn remove_route(&mut self, destination: ATAddress, next_hop: ATAddress) -> bool {
-		if let Some(route) = self.entries.get(&destination) {
-			if route.next_hop == next_hop {
-				self.entries.remove(&destination);
-				println!("[INFO] Routing table updated:\n{self}");
-				return true;
-			}
+		let Some(entry) = self.entries.get_mut(&destination) else {
+			return false;
+		};
+		
+		let Entry::Route(route) = entry else {
+			return false;
+		};
+		
+		if route.next_hop != next_hop {
+			return false;
 		}
 		
-		false
+		let unreachable_destination = Entry::UnreachableDestination {
+			destination_sequence: route.destination_sequence,
+		};
+		
+		*entry = unreachable_destination;
+		
+		println!("[INFO] Routing table updated:\n{self}");
+		return true;
 	}
 	
 	pub fn neighbors(&self) -> impl Iterator<Item = Route> + '_ {
 		self.entries.iter()
+			.filter_map(|(destination, entry)| match entry {
+				Entry::Route(route) => Some((destination, route)),
+				_ => None,
+			})
 			.filter(|(destination, route)| route.next_hop == **destination && **destination != self.own_address)
 			.map(|(_, route)| route)
 			.copied()
@@ -98,8 +133,15 @@ impl Display for RoutingTable {
 		writeln!(f, "|DEST|DSEQ|NHOP|HCNT|")?;
 		writeln!(f, "+----+----+----+----+")?;
 		
-		for (destination, Route { destination_sequence, next_hop, hop_count, .. }) in &self.entries {
-			writeln!(f, "|{destination}|{destination_sequence:04X}|{next_hop}|  {hop_count:02X}|")?;
+		for (destination, entry) in &self.entries {
+			match entry {
+				Entry::Route(Route { destination_sequence, next_hop, hop_count, .. }) => {
+					writeln!(f, "|{destination}|{destination_sequence:04X}|{next_hop}|  {hop_count:02X}|")?;
+				},
+				Entry::UnreachableDestination { destination_sequence } => {
+					writeln!(f, "|{destination}|{destination_sequence:04X}|None|None|")?;
+				},
+			}
 		}
 		
 		write!(f, "+----+----+----+----+")

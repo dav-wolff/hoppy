@@ -17,6 +17,7 @@ pub struct AODVController<C: Fn(ATAddress, &[u8]) + Send + Sync> {
 	outbound_messages: Mutex<BTreeMap<ATAddress, Vec<Box<[u8]>>>>,
 	address: ATAddress,
 	current_route_request_id: AtomicU16,
+	current_sequence_number: AtomicU16,
 	hello_timeout: Duration,
 	data_callback: C,
 }
@@ -40,6 +41,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			outbound_messages: Default::default(),
 			address,
 			current_route_request_id: 0.into(),
+			current_sequence_number: 0.into(),
 			hello_timeout,
 			data_callback,
 		};
@@ -124,15 +126,13 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			return Ok(());
 		}
 		
-		let id = self.current_route_request_id.fetch_add(1, Ordering::Relaxed);
-		
 		let packet = RouteRequestPacket {
-			id,
+			id: self.current_route_request_id.fetch_add(1, Ordering::Relaxed),
 			hop_count: 0,
 			destination: address,
-			destination_sequence: None, // TODO figure out sequence number
+			destination_sequence: routing_table.get_last_known_sequence(address),
 			origin: self.address,
-			origin_sequence: 0, // TODO figure out sequence
+			origin_sequence: self.current_sequence_number.fetch_add(1, Ordering::Relaxed),
 		};
 		
 		at_module.broadcast(&packet.to_bytes())?;
@@ -153,7 +153,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let packet = RouteReplyPacket {
 			hop_count: 0,
 			request_destination: self.address,
-			request_destination_sequence: 0, // TODO figure out sequence number
+			request_destination_sequence: self.current_sequence_number.fetch_add(1, Ordering::Relaxed),
 			request_origin: None,
 		};
 		
@@ -253,12 +253,17 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
 		}
 		
-		
 		if let Some(route) = routing_table.get_route(packet.destination) {
+			let sequence = if packet.destination == self.address {
+				self.current_sequence_number.fetch_add(1, Ordering::Relaxed)
+			} else {
+				route.destination_sequence
+			};
+			
 			let reply = RouteReplyPacket {
 				hop_count: packet.hop_count + route.hop_count,
 				request_destination: packet.destination,
-				request_destination_sequence: 0, // TODO figure out sequence number
+				request_destination_sequence: sequence,
 				request_origin: Some(packet.origin),
 			};
 			
@@ -281,7 +286,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
 		
-		if let Some(new_route) = routing_table.add_route(packet.request_destination, 0, sender, packet.hop_count + 1) { // TODO figure out sequence number
+		if let Some(new_route) = routing_table.add_route(packet.request_destination, packet.request_destination_sequence, sender, packet.hop_count + 1) {
 			self.send_outbound_messages(&mut at_module, packet.request_destination, new_route)?;
 		}
 		
