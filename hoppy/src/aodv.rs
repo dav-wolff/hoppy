@@ -236,7 +236,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			RouteReply(packet) => self.handle_route_reply(sender, packet)?,
 			RouteError(packet) => self.handle_route_error(sender, packet)?,
 			Data(packet) => self.handle_data(packet)?,
-			DataAcknowledge(packet) => self.handle_data_acknowledge(packet)?,
 		}
 		
 		Ok(())
@@ -354,22 +353,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			eprintln!("[WARNING] Received DataPacket for unknown destination:\n{packet:#?}");
 			
 			// DataPackets without a valid route are dropped without a response
-			return Ok(());
-		};
-		
-		let mut at_module = self.at_module_write();
-		at_module.send(route.next_hop, &packet.to_bytes())?;
-		
-		Ok(())
-	}
-	
-	fn handle_data_acknowledge(&self, packet: &DataAcknowledgePacket) -> Result<(), io::Error> {
-		let routing_table = self.routing_table_read();
-		
-		let Some(route) = routing_table.get_route(packet.destination) else {
-			eprintln!("[WARNING] Received DataAcknowledgePacket for unknown destination:\n{packet:#?}");
-			
-			// DataAcknowledgePackets without a valid route are dropped without a response
 			return Ok(());
 		};
 		

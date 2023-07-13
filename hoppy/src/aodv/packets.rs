@@ -14,7 +14,6 @@ pub enum AODVPacketBody {
 	RouteReply(RouteReplyPacket),
 	RouteError(RouteErrorPacket),
 	Data(DataPacket),
-	DataAcknowledge(DataAcknowledgePacket),
 }
 
 impl Debug for AODVPacketBody {
@@ -26,7 +25,6 @@ impl Debug for AODVPacketBody {
 			RouteReply(packet) => packet.fmt(f),
 			RouteError(packet) => packet.fmt(f),
 			Data(packet) => packet.fmt(f),
-			DataAcknowledge(packet) => packet.fmt(f),
 		}
 	}
 }
@@ -62,7 +60,6 @@ pub fn parse_packet(message: &ATMessage) -> Result<AODVPacket, io::Error> {
 		b'1' => RouteReply(RouteReplyPacket::parse_from(data)?),
 		b'2' => RouteError(RouteErrorPacket::parse_from(data)?),
 		b'3' => Data(DataPacket::parse_from(data)?),
-		b'4' => DataAcknowledge(DataAcknowledgePacket::parse_from(data)?),
 		_ => return Err(ErrorKind::InvalidData.into()),
 	};
 	
@@ -220,33 +217,6 @@ impl DataPacket {
 		data.extend_from_slice(self.origin.as_bytes());
 		data.extend(encode_ascii_hex(self.sequence));
 		data.extend_from_slice(&self.payload);
-		
-		data.into()
-	}
-}
-
-#[derive(Debug)]
-pub struct DataAcknowledgePacket {
-	pub destination: ATAddress,
-	pub origin: ATAddress,
-	pub sequence: u8,
-}
-
-impl DataAcknowledgePacket {
-	fn parse_from(mut data: &[u8]) -> Result<Self, io::Error> {
-		Ok(Self {
-			destination: take_address(&mut data)?,
-			origin: take_address(&mut data)?,
-			sequence: take_int(&mut data, 2)?,
-		})
-	}
-	
-	pub fn to_bytes(&self) -> Box<[u8]> {
-		let mut data = Vec::with_capacity(11);
-		data.push(b'4');
-		data.extend_from_slice(self.destination.as_bytes());
-		data.extend_from_slice(self.origin.as_bytes());
-		data.extend(encode_ascii_hex(self.sequence));
 		
 		data.into()
 	}
