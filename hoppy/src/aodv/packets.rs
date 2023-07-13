@@ -171,22 +171,19 @@ impl RouteReplyPacket {
 #[derive(Debug)]
 pub struct RouteErrorPacket {
 	pub destination: ATAddress,
-	pub destination_sequence: u16,
 }
 
 impl RouteErrorPacket {
 	fn parse_from(mut data: &[u8]) -> Result<Self, io::Error> {
 		Ok(Self {
 			destination: take_address(&mut data)?,
-			destination_sequence: take_int(&mut data, 4)?,
 		})
 	}
 	
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		let mut data = Vec::with_capacity(11);
+		let mut data = Vec::with_capacity(5);
 		data.push(b'2');
 		data.extend_from_slice(self.destination.as_bytes());
-		data.extend(encode_ascii_hex(self.destination_sequence));
 		
 		data.into()
 	}
@@ -196,7 +193,6 @@ impl RouteErrorPacket {
 pub struct DataPacket {
 	pub destination: ATAddress,
 	pub origin: ATAddress,
-	pub sequence: u8,
 	pub payload: Box<[u8]>,
 }
 
@@ -205,17 +201,15 @@ impl DataPacket {
 		Ok(Self {
 			destination: take_address(&mut data)?,
 			origin: take_address(&mut data)?,
-			sequence: take_int(&mut data, 2)?,
 			payload: data.into(),
 		})
 	}
 	
 	pub fn to_bytes(&self) -> Box<[u8]> {
-		let mut data = Vec::with_capacity(11 + self.payload.len());
+		let mut data = Vec::with_capacity(9 + self.payload.len());
 		data.push(b'3');
 		data.extend_from_slice(self.destination.as_bytes());
 		data.extend_from_slice(self.origin.as_bytes());
-		data.extend(encode_ascii_hex(self.sequence));
 		data.extend_from_slice(&self.payload);
 		
 		data.into()

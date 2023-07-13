@@ -117,7 +117,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			let packet = DataPacket {
 				destination: address,
 				origin: self.address,
-				sequence: 0, // TODO figure out sequence number
 				payload: data,
 			};
 			
@@ -196,7 +195,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			
 			let packet = RouteErrorPacket {
 				destination,
-				destination_sequence: route.destination_sequence,
 			};
 			
 			at_module.broadcast(&packet.to_bytes())?;
@@ -216,7 +214,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			let packet = DataPacket {
 				destination,
 				origin: self.address,
-				sequence: 0, // TODO figure out sequence number
 				payload: message,
 			};
 			
