@@ -286,9 +286,9 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 	
 	fn handle_route_reply(&self, sender: ATAddress, packet: &RouteReplyPacket) -> Result<(), io::Error> {
 		let mut routing_table = self.routing_table_write();
-		let mut at_module = self.at_module_write();
 		
 		if let Some(new_route) = routing_table.add_route(packet.request_destination, packet.request_destination_sequence, sender, packet.hop_count + 1) {
+			let mut at_module = self.at_module_write();
 			self.send_outbound_messages(&mut at_module, packet.request_destination, new_route)?;
 		}
 		
@@ -302,10 +302,16 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			return Ok(());
 		}
 		
+		let mut at_module = self.at_module_write();
+		
 		let Some(route) = routing_table.get_route(request_origin) else {
 			eprintln!("[WARNING] Received RouteReplyPacket for unknown request origin:\n{packet:#?}");
 			
-			// RouteReplyPackets without a valid route are dropped without a response
+			let packet = RouteErrorPacket {
+				destination: request_origin,
+			};
+			
+			at_module.broadcast(&packet.to_bytes())?;
 			return Ok(());
 		};
 		
@@ -345,15 +351,19 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		}
 		
 		let routing_table = self.routing_table_read();
+		let mut at_module = self.at_module_write();
 		
 		let Some(route) = routing_table.get_route(packet.destination) else {
 			eprintln!("[WARNING] Received DataPacket for unknown destination:\n{packet:#?}");
 			
-			// DataPackets without a valid route are dropped without a response
+			let packet = RouteErrorPacket {
+				destination: packet.destination,
+			};
+			
+			at_module.broadcast(&packet.to_bytes())?;
 			return Ok(());
 		};
 		
-		let mut at_module = self.at_module_write();
 		at_module.send(route.next_hop, &packet.to_bytes())?;
 		
 		Ok(())
