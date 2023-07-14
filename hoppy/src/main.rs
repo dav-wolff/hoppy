@@ -61,8 +61,15 @@ fn main() {
 				.expect("couldn't read from stdin");
 			let line = line.as_bytes();
 			
-			let address = ATAddress::new(line[..4].try_into().unwrap())
-				.expect("address in invalid format");
+			let Ok(address): Result<[u8; 4], std::array::TryFromSliceError> = line[..4].try_into() else {
+				eprintln!("Invalid address!");
+				continue;
+			};
+			
+			let Ok(address) = ATAddress::new(address) else {
+				eprintln!("Invalid address!");
+				continue;
+			};
 			
 			controller.send(address, line[4..].into())
 				.expect("could not send data");
