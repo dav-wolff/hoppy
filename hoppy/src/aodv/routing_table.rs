@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display, time::Instant};
 
-use crate::at_module::at_address::ATAddress;
+use crate::{at_module::at_address::ATAddress, aodv::sequence_number_newer};
 
 #[derive(Debug, Clone, Copy)]
 enum Entry {
@@ -64,7 +64,7 @@ impl RoutingTable {
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) -> Option<Route> {
 		if let Some(Entry::Route(route)) = self.entries.get(&destination) {
-			if route.destination_sequence >= destination_sequence {
+			if !sequence_number_newer(destination_sequence, route.destination_sequence) {
 				return None;
 			}
 		}

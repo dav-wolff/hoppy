@@ -224,7 +224,22 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 	}
 	
 	fn update_sequence_number(&self, new_sequence_number: u16) {
-		self.current_sequence_number.fetch_max(new_sequence_number, Ordering::Relaxed); // TODO max with overflow
+		let current = &self.current_sequence_number;
+		let new = new_sequence_number;
+		let mut old = self.current_sequence_number.load(Ordering::Relaxed);
+		
+		loop {
+			let max = if sequence_number_newer(new, old) {
+				new
+			} else {
+				old
+			};
+			
+			match current.compare_exchange_weak(old, max, Ordering::Relaxed, Ordering::Relaxed) {
+				Ok(_) => break,
+				Err(i) => old = i,
+			}
+		}
 	}
 	
 	fn handle_packet(&self, packet: &AODVPacket) -> Result<(), io::Error> {
@@ -376,4 +391,9 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		
 		Ok(())
 	}
+}
+
+fn sequence_number_newer(new_sequence_number: u16, old_sequence_number: u16) -> bool {
+	let idifference: i16 = new_sequence_number as i16 - old_sequence_number as i16;
+	idifference > 0
 }
