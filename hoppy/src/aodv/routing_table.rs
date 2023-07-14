@@ -63,6 +63,10 @@ impl RoutingTable {
 	}
 	
 	pub fn add_route(&mut self, destination: ATAddress, destination_sequence: u16, next_hop: ATAddress, hop_count: u8) -> Option<Route> {
+		if destination == self.own_address {
+			return None;
+		}
+		
 		if let Some(Entry::Route(route)) = self.entries.get(&destination) {
 			if !sequence_number_newer(destination_sequence, route.destination_sequence) {
 				return None;
