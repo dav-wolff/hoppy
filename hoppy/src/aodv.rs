@@ -258,6 +258,10 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 	}
 	
 	fn handle_route_request(&self, sender: ATAddress, packet: &RouteRequestPacket) -> Result<(), io::Error> {
+		if packet.origin == self.address {
+			return Ok(());
+		}
+		
 		let mut seen_requests = self.seen_requests.lock()
 			.expect("should only be accessed from this thread");
 		
