@@ -1,4 +1,4 @@
-use std::{io::{self, ErrorKind}, ops::RangeInclusive, fmt::{Debug, Display, self}, str};
+use std::{io::{self, ErrorKind}, fmt::{Debug, Display, self}, str, error::Error};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ATAddress ([u8; 4]);
@@ -6,14 +6,14 @@ pub struct ATAddress ([u8; 4]);
 impl ATAddress {
 	pub(super) const BROADCAST: ATAddress = ATAddress(*b"FFFF");
 	
-	pub fn new(data: [u8; 4]) -> Result<Self, io::Error> {
-		// broadcast address not allowed as a regular address
-		if data == *b"FFFF" {
-			return Err(ErrorKind::InvalidData.into());
+	pub fn new(mut data: [u8; 4]) -> Result<Self, ATAddressError> {
+		if !validate_uppercase_hex_digits(&mut data) {
+			return Err(ATAddressError::InvalidAddress);
 		}
 		
-		if !is_hex_digits(&data) {
-			return Err(ErrorKind::InvalidData.into());
+		// broadcast address not allowed as a regular address
+		if data == *b"FFFF" {
+			return Err(ATAddressError::BroadcastAddress);
 		}
 		
 		Ok(Self(data))
@@ -39,10 +39,37 @@ impl Debug for ATAddress {
 	}
 }
 
-fn is_hex_digits(chars: &[u8]) -> bool {
-	const DEC_DIGITS: RangeInclusive<u8> = b'0'..=b'9';
-	const HEX_DIGITS: RangeInclusive<u8> = b'A'..=b'F';
+fn validate_uppercase_hex_digits(chars: &mut [u8]) -> bool {
+	for char in chars {
+		match char {
+			b'0'..=b'9' | b'A'..=b'F' => continue,
+			b'a'..=b'f' => *char = *char - b'a' + b'A',
+			_ => return false,
+		}
+	}
 	
-	chars.iter()
-		.all(|char| DEC_DIGITS.contains(char) || HEX_DIGITS.contains(char))
+	true
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum ATAddressError {
+	InvalidAddress,
+	BroadcastAddress,
+}
+
+impl Display for ATAddressError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{self:?}")
+	}
+}
+
+impl Error for ATAddressError {}
+
+impl From<ATAddressError> for io::Error {
+	fn from(value: ATAddressError) -> Self {
+		match value {
+			ATAddressError::InvalidAddress => io::Error::new(ErrorKind::InvalidData, "Invalid AT address"),
+			ATAddressError::BroadcastAddress => io::Error::new(ErrorKind::InvalidData, "Cannot use broadcast address"),
+		}
+	}
 }

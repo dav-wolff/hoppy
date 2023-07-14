@@ -1,6 +1,7 @@
 use std::io::{self, ErrorKind};
 use std::fmt::Debug;
 
+use crate::at_module::at_address::ATAddressError;
 use crate::{at_module::{ATMessage, at_address::ATAddress}, hex::{parse_ascii_hex, Integer, encode_ascii_hex}};
 
 #[derive(Debug)]
@@ -47,7 +48,9 @@ fn take_int<I: Integer<I>>(data: &mut &[u8], amount: usize) -> Result<I, io::Err
 
 fn take_address(data: &mut &[u8]) -> Result<ATAddress, io::Error> {
 	let bytes = take_bytes(data, 4)?;
-	ATAddress::new(bytes.try_into().expect("take_bytes(_, 4) should always return 4 bytes"))
+	let bytes = bytes.try_into()
+		.expect("take_bytes(_, 4) should always return 4 bytes");
+	Ok(ATAddress::new(bytes)?)
 }
 
 pub fn parse_packet(message: &ATMessage) -> Result<AODVPacket, io::Error> {
@@ -141,11 +144,13 @@ impl RouteReplyPacket {
 			request_destination_sequence: take_int(&mut data, 4)?,
 			request_origin: {
 				let bytes = take_bytes(&mut data, 4)?;
+				let bytes = bytes.try_into()
+					.expect("take_bytes(_, 4) should always return 4 bytes");
 				
-				if bytes == b"FFFF" { // broadcast is used for hello packages which have no request_origin
-					None
-				} else {
-					Some(ATAddress::new(bytes.try_into().expect("take_bytes(_, 4) should always return 4 bytes"))?)
+				match ATAddress::new(bytes) {
+					Ok(address) => Some(address),
+					Err(ATAddressError::BroadcastAddress) => None, // broadcast is used for hello packages which have no request_origin
+					Err(err) => Err(err)?,
 				}
 			},
 		})
