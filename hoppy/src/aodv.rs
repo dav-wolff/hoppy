@@ -223,6 +223,10 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		Ok(())
 	}
 	
+	fn update_sequence_number(&self, new_sequence_number: u16) {
+		self.current_sequence_number.fetch_max(new_sequence_number, Ordering::Relaxed); // TODO max with overflow
+	}
+	
 	fn handle_packet(&self, packet: &AODVPacket) -> Result<(), io::Error> {
 		use AODVPacketBody::*;
 		
@@ -247,6 +251,8 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		if !is_new_request {
 			return Ok(());
 		}
+		
+		self.update_sequence_number(packet.origin_sequence);
 		
 		let mut routing_table = self.routing_table_write();
 		let mut at_module = self.at_module_write();
@@ -285,6 +291,8 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 	}
 	
 	fn handle_route_reply(&self, sender: ATAddress, packet: &RouteReplyPacket) -> Result<(), io::Error> {
+		self.update_sequence_number(packet.request_destination_sequence);
+		
 		let mut routing_table = self.routing_table_write();
 		
 		if let Some(new_route) = routing_table.add_route(packet.request_destination, packet.request_destination_sequence, sender, packet.hop_count + 1) {
