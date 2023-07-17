@@ -113,7 +113,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let routing_table = self.routing_table_read();
 		let mut at_module = self.at_module_write();
 		
-		if let Some(route) = routing_table.get_route(address) {
+		if let Some(route) = routing_table.get_route(address, None) {
 			let packet = DataPacket {
 				destination: address,
 				origin: self.address,
@@ -280,7 +280,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			self.send_outbound_messages(&mut at_module, packet.origin, new_route)?;
 		}
 		
-		if let Some(route) = routing_table.get_route(packet.destination) {
+		if let Some(route) = routing_table.get_route(packet.destination, packet.destination_sequence) {
 			let sequence = if packet.destination == self.address {
 				self.current_sequence_number.fetch_add(1, Ordering::Relaxed)
 			} else {
@@ -331,7 +331,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		
 		let mut at_module = self.at_module_write();
 		
-		let Some(route) = routing_table.get_route(request_origin) else {
+		let Some(route) = routing_table.get_route(request_origin, None) else {
 			eprintln!("[WARNING] Received RouteReplyPacket for unknown request origin:\n{packet:#?}");
 			
 			let packet = RouteErrorPacket {
@@ -380,7 +380,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 		let routing_table = self.routing_table_read();
 		let mut at_module = self.at_module_write();
 		
-		let Some(route) = routing_table.get_route(packet.destination) else {
+		let Some(route) = routing_table.get_route(packet.destination, None) else {
 			eprintln!("[WARNING] Received DataPacket for unknown destination:\n{packet:#?}");
 			
 			let packet = RouteErrorPacket {

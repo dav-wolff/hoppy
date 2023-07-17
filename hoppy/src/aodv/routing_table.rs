@@ -43,10 +43,19 @@ impl RoutingTable {
 		routing_table
 	}
 	
-	pub fn get_route(&self, destination: ATAddress) -> Option<Route> {
+	pub fn get_route(&self, destination: ATAddress, destination_sequence: Option<u16>) -> Option<Route> {
 		self.entries.get(&destination)
-			.map(|entry| match entry {
-				Entry::Route(route) => Some(route),
+			.map(|entry| match (entry, destination_sequence) {
+				(Entry::Route(route), Some(destination_sequence)) => {
+					if destination == self.own_address {
+						Some(route)
+					} else if sequence_number_newer(route.destination_sequence, destination_sequence) {
+						Some(route)
+					} else {
+						None
+					}
+				},
+				(Entry::Route(route), None) => Some(route),
 				_ => None,
 			})
 			.flatten()
