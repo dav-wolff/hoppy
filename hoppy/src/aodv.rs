@@ -288,7 +288,7 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 			};
 			
 			let reply = RouteReplyPacket {
-				hop_count: packet.hop_count + route.hop_count,
+				hop_count: route.hop_count,
 				request_destination: packet.destination,
 				request_destination_sequence: sequence,
 				request_origin: Some(packet.origin),
