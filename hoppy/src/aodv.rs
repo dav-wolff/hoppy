@@ -398,6 +398,6 @@ impl<'scope, C: Fn(ATAddress, &[u8]) + Send + Sync + 'scope> AODVController<C> {
 }
 
 fn sequence_number_newer(new_sequence_number: u16, old_sequence_number: u16) -> bool {
-	let idifference: i16 = new_sequence_number as i16 - old_sequence_number as i16;
-	idifference > 0
+	let difference: i16 = new_sequence_number as i16 - old_sequence_number as i16;
+	difference > 0
 }
