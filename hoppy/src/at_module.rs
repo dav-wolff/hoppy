@@ -93,6 +93,9 @@ impl ATModule {
 	}
 	
 	pub fn send(&mut self, destination: ATAddress, data: &[u8]) -> Result<(), io::Error> {
+		let text = String::from_utf8_lossy(data);
+		println!("[INFO] Sending:\n\t<{destination}> {text}");
+		
 		write!(self.port, "AT+DEST={destination}\r\n")?;
 		
 		if !self.read_reply().is_ok() {
